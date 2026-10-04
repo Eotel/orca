@@ -40,7 +40,7 @@ export type AgentLaunchRuntimeStubOptions = {
   /** What the runtime reports about an offered prompt's typed line; unset reports nothing. */
   lineCarriesPrompt?: boolean
   /** Panes this runtime found already running, by the handle it issued them: a restarted host
-   *  adopting a surviving PTY issues a new handle for the same pane. */
+   *  that could not re-adopt a surviving PTY's handle issues a new one for the same pane. */
   adoptedPanes?: Record<string, string>
 }
 
@@ -63,7 +63,7 @@ export function setAgentLaunchRecordStore(store: AgentSessionRecordStore | null)
 
 export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
   const worktreeCreateResults = new Map<string, Promise<unknown>>()
-  // Only the panes this runtime created or adopted: a handle is process-scoped, a pane key is not.
+  // Only the panes this runtime created or adopted, under the handle it issued them.
   const handlesByPaneKey = new Map(Object.entries(options.adoptedPanes ?? {}))
   const waitForSetupTerminalCompletion = vi.fn(
     async (_handle: string, _signal?: AbortSignal): Promise<{ exitCode: number | null }> => ({

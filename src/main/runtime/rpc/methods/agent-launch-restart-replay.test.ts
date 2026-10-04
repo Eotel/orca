@@ -4,8 +4,9 @@
  * The record is written twice: once when the surface exists and once when the prompt's fate is
  * known. A host that dies at any point leaves the replay a truthful answer — the running agent once
  * its surface is recorded, an honest "unknown" before — and never a second agent. A "restart" here
- * is what a new process sees: the store reopened from disk and a runtime with no in-flight launches,
- * which issues its own handles, so a surviving pane comes back under a new one.
+ * is what a new process sees: the store reopened from disk and a runtime with no in-flight launches.
+ * Its runtime issues a surviving pane a new handle — the case where the daemon's or relay's handle
+ * was not re-adopted, the only one in which re-deriving the handle from the pane key changes it.
  */
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -74,7 +75,8 @@ const DESKTOP_IPC = {
   clientKind: 'runtime' as const,
   clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
 }
-/** The handle a restarted host issues the pane that outlived the old one. */
+/** The handle a restarted host issues a pane that outlived the old one, when it could not
+ *  re-adopt that pane's recorded handle. */
 const ADOPTED_HANDLE = 'term_adopted'
 
 let directory: string
@@ -210,7 +212,7 @@ describe('a host restart mid-launch', () => {
     await restartHost()
     const restarted = restartedHostRuntime()
 
-    // The dead host's `term_1` names nothing now; the pane is the durable name.
+    // The dead host's `term_1` was not re-adopted; the pane is the durable name.
     await expect(launch(restarted, PROMPTED_LAUNCH, UPGRADED_PHONE)).resolves.toEqual(
       UNCONFIRMED_AGENT
     )

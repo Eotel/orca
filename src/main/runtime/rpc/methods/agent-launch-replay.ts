@@ -113,10 +113,12 @@ function readsUnconfirmedLaunchPrompt(
 }
 
 /**
- * A terminal handle is issued by the process that answered, so a recorded one is dead after a
- * restart. The pane key is the durable name: the handle is re-derived from it in this runtime. A
- * pane this runtime no longer knows keeps the recorded handle, which then resolves to not-found —
- * the truth about a terminal that is gone. The handle stays because shipped clients require one.
+ * The handle this runtime uses for the recorded pane now. Usually that is the recorded handle: the
+ * daemon and the SSH relay keep each PTY's handle, and a restarted runtime re-adopts it. It does not
+ * when the PTY's incarnation changed, when it already issued that pane another handle before reading
+ * the inventory, or when the PTY stored none; the pane key, the durable name, finds it then. A pane
+ * this runtime no longer knows keeps the recorded handle, which reads as an exited terminal — the
+ * truth about one that is gone. The handle stays because shipped clients require one.
  */
 function withLiveTerminalHandle(
   recorded: AgentLaunchResult,

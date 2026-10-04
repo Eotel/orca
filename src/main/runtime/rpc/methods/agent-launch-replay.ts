@@ -16,6 +16,7 @@
  */
 
 import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch-operation'
+import { AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import { isAgentLaunchResult, type AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type {
   AgentSessionOperationOutcome,
@@ -100,6 +101,60 @@ function answerFromRecordedRow(
     : { decision: 'refuse', refusal: replay.refusal }
 }
 
+/** The CLI (no declared client) ships with this host; any other caller must say it reads the word. */
+function readsUnconfirmedLaunchPrompt(
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY) ===
+      true
+  )
+}
+
+/**
+ * A terminal handle is issued by the process that answered, so a recorded one is dead after a
+ * restart. The pane key is the durable name: the handle is re-derived from it in this runtime. A
+ * pane this runtime no longer knows keeps the recorded handle, which then resolves to not-found —
+ * the truth about a terminal that is gone. The handle stays because shipped clients require one.
+ */
+function withLiveTerminalHandle(
+  recorded: AgentLaunchResult,
+  runtime: Pick<RpcContext['runtime'], 'getTerminalHandleForPaneKey'>
+): AgentLaunchResult {
+  const { outcome } = recorded
+  if (outcome.kind !== 'terminal' || !outcome.paneKey) {
+    return recorded
+  }
+  const handle = runtime.getTerminalHandleForPaneKey(outcome.paneKey)
+  return handle && handle !== outcome.handle
+    ? { ...recorded, outcome: { ...outcome, handle } }
+    : recorded
+}
+
+/**
+ * A recorded answer as this caller may read it now. A prompt the host stopped delivering is
+ * `unconfirmed` only to a caller that reads the word; every other caller gets the refusal it got
+ * before the first write existed, never a `not-delivered` that invites a duplicate turn.
+ */
+function presentRecordedAnswer(
+  context: RpcContext,
+  operationId: string,
+  answer: AgentLaunchAdmission
+): AgentLaunchAdmission {
+  if (answer.decision !== 'replay') {
+    return answer
+  }
+  if (answer.result.prompt?.outcome === 'unconfirmed' && !readsUnconfirmedLaunchPrompt(context)) {
+    return refusal(
+      operationId,
+      'agent_session_operation_unknown',
+      'started its agent, but whether its prompt arrived is unknown'
+    )
+  }
+  return { decision: 'replay', result: withLiveTerminalHandle(answer.result, context.runtime) }
+}
+
 /**
  * Admit, then claim, in one durable transaction so a launch writes the ledger once before its effect.
  *
@@ -136,7 +191,7 @@ export async function admitAgentLaunchOperation(
   if (admitted.decision === 'replay') {
     const answer = answerFromRecordedRow(operationId, admitted.row.outcome)
     if (answer) {
-      return answer
+      return presentRecordedAnswer(context, operationId, answer)
     }
   }
   // Unreachable with both steps in one transaction; answered as uncertain rather than run twice.
@@ -150,10 +205,10 @@ export async function admitAgentLaunchOperation(
   if (claim.claim === 'lost') {
     // The handler joins same-process retries before admission. Reaching a claimed row here means
     // this runtime did not start it, so treating it as restart uncertainty is the safe answer.
-    return (
-      answerFromRecordedRow(operationId, claim.row.outcome) ??
-      refusal(operationId, 'agent_session_operation_unknown', 'is claimed but unsettled')
-    )
+    const answer = answerFromRecordedRow(operationId, claim.row.outcome)
+    return answer
+      ? presentRecordedAnswer(context, operationId, answer)
+      : refusal(operationId, 'agent_session_operation_unknown', 'is claimed but unsettled')
   }
   const succeeded = (result: AgentLaunchResult) =>
     store.recordOperationOutcome({

@@ -147,8 +147,9 @@ type ReplaySafeLaunch = {
   attachOperationId: string
   callerKey: string
   terminalSpawn: TerminalSpawnDispatch
-  /** Records the surface the moment it exists. Fired, never awaited: the ledger's transactions run
-   *  in order, so the final settle still lands after it, and the prompt never waits on bookkeeping. */
+  /** Records the surface the moment it exists, an owed prompt as `unconfirmed`. Fired, never
+   *  awaited: the ledger's transactions run in order, so the final settle still lands after it, and
+   *  the prompt never waits on bookkeeping. */
   recordSurface: (provisional: AgentLaunchResult) => void
 }
 
@@ -280,7 +281,8 @@ async function executeReplaySafeAgentLaunch(
     }
     throw new AgentLaunchExecutionError(error, failedWithoutEffects !== null)
   }
-  // Settlement is bookkeeping; failure leaves the truthful `unknown` refusal for later retries.
+  // Bookkeeping: a failure leaves the first write, whose owed prompt replays as `unconfirmed` (or as
+  // `unknown` to a caller that cannot read it), never as `not-delivered`.
   await settleQuietly(admission.settle(result))
   return result
 }

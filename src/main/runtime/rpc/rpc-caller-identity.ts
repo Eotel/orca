@@ -24,6 +24,11 @@ export const DESKTOP_RPC_CALLER: RpcCallerIdentity = { kind: 'desktop' }
  * A transport that names its caller is believed; one that declares no client at all is the
  * in-process runtime socket, trusted as it always was; one that declares a client it cannot name has
  * no identity, and anything that needs one refuses it.
+ *
+ * Temporary: "no declared client" means the local CLI, so the SSH remote CLI bridge and browser
+ * automation share its namespace, and a new transport that forgets to stamp its caller inherits it.
+ * Before plugins ship (plan §4) the runtime socket stamps `local-cli` itself and no stamp means no
+ * identity.
  */
 export function resolveRpcCallerIdentity(
   transport:

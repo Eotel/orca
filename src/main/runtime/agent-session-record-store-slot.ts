@@ -5,6 +5,11 @@
 // whole chat host (provider adapters, the host, the model catalog) first. The store is opened here
 // instead and the chat host, when something needs it, is built on this same instance: the store is
 // a single writer, so a second copy of it would diverge.
+//
+// Known edges, both reachable only once quit has begun (stop has no other production caller): a
+// stop whose host teardown fails empties the slot while that host still holds its store open, so a
+// later admission would open a second one; and a store opened after stop is closed by nothing but
+// process exit.
 
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'

@@ -4,15 +4,19 @@
  * The record is written twice: once when the surface exists and once when the prompt's fate is
  * known. A host that dies at any point leaves the replay a truthful answer — the running agent once
  * its surface is recorded, an honest "unknown" before — and never a second agent. A "restart" here
- * is what a new process sees: the store reopened from disk and a runtime with no in-flight launches.
+ * is what a new process sees: the store reopened from disk and a runtime with no in-flight launches,
+ * which issues its own handles, so a surviving pane comes back under a new one.
  */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
-import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import {
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-launch-runtime-capability'
+import { isAgentLaunchResult, type AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session-operation-ledger'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
@@ -20,6 +24,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { DESKTOP_RPC_CALLER } from '../rpc-caller-identity'
+import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
 import {
   methodNamed,
   rpcContext,
@@ -54,22 +59,45 @@ const PHONE: Partial<RpcContext> = {
   pairedDeviceId: 'device-1',
   clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY]
 }
+/** The same paired device on a build that reads an `unconfirmed` prompt. */
+const UPGRADED_PHONE: Partial<RpcContext> = {
+  ...PHONE,
+  clientCapabilities: [
+    AGENT_LAUNCH_RUNTIME_CAPABILITY,
+    AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY
+  ]
+}
 /** Exactly what the desktop's `runtime:call` handler hands the dispatcher. */
 const DESKTOP_IPC = {
   clientId: 'desktop-renderer',
   caller: DESKTOP_RPC_CALLER,
   clientKind: 'runtime' as const,
-  clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY]
+  clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
 }
+/** The handle a restarted host issues the pane that outlived the old one. */
+const ADOPTED_HANDLE = 'term_adopted'
 
 let directory: string
 let store: AgentSessionRecordStore
 
-function hostRuntime() {
+function hostRuntime(adoptedPanes?: Record<string, string>) {
   // A phone's launch into an existing workspace also moves the phone's own view to the new tab.
-  return Object.assign(runtimeStub({ settings: TERMINAL_ONLY, terminalPaneKey: PANE_KEY }), {
-    selectCreatedMobileSessionTabForClient: vi.fn(() => true)
-  })
+  return Object.assign(
+    runtimeStub({ settings: TERMINAL_ONLY, terminalPaneKey: PANE_KEY, adoptedPanes }),
+    { selectCreatedMobileSessionTabForClient: vi.fn(() => true) }
+  )
+}
+
+/** The host after a restart, still running the pane the dead one launched. */
+function restartedHostRuntime() {
+  return hostRuntime({ [PANE_KEY]: ADOPTED_HANDLE })
+}
+
+const UNCONFIRMED_AGENT = {
+  outcome: { kind: 'terminal', handle: ADOPTED_HANDLE, paneKey: PANE_KEY },
+  worktreeId: 'wt-7',
+  receipt: expect.objectContaining({ mode: 'terminal' }),
+  prompt: { delivery: 'submit', outcome: 'unconfirmed' }
 }
 
 function launch(
@@ -113,6 +141,46 @@ async function ledgerWritesQueuedBefore(ledger: AgentSessionRecordStore): Promis
   })
 }
 
+/** Launches with a paste that never returns: the host dies while it waits for the agent. */
+async function launchUntilPasteStarts(runtime: AgentLaunchRuntimeStub): Promise<void> {
+  let pasting: () => void = () => {}
+  const pasteStarted = new Promise<void>((resolve) => {
+    pasting = resolve
+  })
+  deliverTerminalPrompt.mockImplementationOnce(() => {
+    pasting()
+    return new Promise<boolean>(() => {})
+  })
+  void launch(runtime)
+  await pasteStarted
+  await ledgerWritesQueuedBefore(store)
+}
+
+/** The ledger as the launch reaches it, with the launch's `nth` write (1-based) replaced. */
+function replaceLaunchWrite(
+  ledger: AgentSessionRecordStore,
+  nth: number,
+  write: () => Promise<void>
+): void {
+  const recordOperationOutcome = ledger.recordOperationOutcome.bind(ledger)
+  let launchWrites = 0
+  vi.spyOn(ledger, 'recordOperationOutcome').mockImplementation((input) => {
+    if (input.operationId === OPERATION_ID && input.callerKey === 'device-1') {
+      launchWrites += 1
+      if (launchWrites === nth) {
+        return write()
+      }
+    }
+    return recordOperationOutcome(input)
+  })
+}
+
+function promptOutcome(outcome: AgentSessionOperationRow['outcome'] | undefined): unknown {
+  return outcome?.status === 'succeeded' && isAgentLaunchResult(outcome.launch)
+    ? outcome.launch.prompt?.outcome
+    : undefined
+}
+
 function dispatcherFor(runtime: AgentLaunchRuntimeStub): RpcDispatcher {
   return new RpcDispatcher({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements every runtime method agent.launch reaches, plus the id the dispatcher stamps on replies.
@@ -135,35 +203,71 @@ afterEach(async () => {
 })
 
 describe('a host restart mid-launch', () => {
-  it('finds the running agent when the host died while its prompt waited for readiness', async () => {
-    // The paste waits for the agent forever: the host dies first.
-    let waiting: () => void = () => {}
-    const readinessWait = new Promise<void>((resolve) => {
-      waiting = resolve
-    })
-    deliverTerminalPrompt.mockImplementationOnce(() => {
-      waiting()
-      return new Promise<boolean>(() => {})
-    })
+  it('finds the running agent, under the handle the new host issued, after a restart mid-paste', async () => {
     const dying = hostRuntime()
-    void launch(dying)
-    await readinessWait
-    await ledgerWritesQueuedBefore(store)
+    await launchUntilPasteStarts(dying)
 
     await restartHost()
-    const restarted = hostRuntime()
-    const replayed = await launch(restarted)
+    const restarted = restartedHostRuntime()
 
-    expect(replayed).toEqual({
-      outcome: { kind: 'terminal', handle: 'term_1', paneKey: PANE_KEY },
-      worktreeId: 'wt-7',
-      receipt: expect.objectContaining({ mode: 'terminal' }),
-      // The dead host never pasted it, and saying so lets the caller keep the text.
-      prompt: { delivery: 'submit', outcome: 'not-delivered' }
-    })
+    // The dead host's `term_1` names nothing now; the pane is the durable name.
+    await expect(launch(restarted, PROMPTED_LAUNCH, UPGRADED_PHONE)).resolves.toEqual(
+      UNCONFIRMED_AGENT
+    )
     expect(restarted.createTerminal).not.toHaveBeenCalled()
     expect(dying.createTerminal).toHaveBeenCalledOnce()
     expect(deliverTerminalPrompt).toHaveBeenCalledOnce()
+  })
+
+  it('answers a caller that cannot read "unconfirmed" as before: unknown, never "not sent"', async () => {
+    await launchUntilPasteStarts(hostRuntime())
+
+    await restartHost()
+    const restarted = restartedHostRuntime()
+
+    await expect(launch(restarted)).rejects.toThrow('agent_session_operation_unknown')
+    // The same row still answers a caller that reads the word: the refusal is presentation only.
+    await expect(launch(restarted, PROMPTED_LAUNCH, UPGRADED_PHONE)).resolves.toEqual(
+      UNCONFIRMED_AGENT
+    )
+    expect(restarted.createTerminal).not.toHaveBeenCalled()
+    expect(deliverTerminalPrompt).toHaveBeenCalledOnce()
+  })
+
+  it('stays unconfirmed when the host died after the paste returned, before the final write', async () => {
+    let pasted: () => void = () => {}
+    const pasteReturned = new Promise<void>((resolve) => {
+      pasted = resolve
+    })
+    deliverTerminalPrompt.mockImplementationOnce(async () => {
+      pasted()
+      return true
+    })
+    // The final write never lands: the process is gone by then.
+    replaceLaunchWrite(store, 2, () => new Promise<void>(() => {}))
+    void launch(hostRuntime())
+    await pasteReturned
+    await untilRecorded('succeeded')
+    await ledgerWritesQueuedBefore(store)
+
+    await restartHost()
+    const restarted = restartedHostRuntime()
+
+    await expect(launch(restarted, PROMPTED_LAUNCH, UPGRADED_PHONE)).resolves.toEqual(
+      UNCONFIRMED_AGENT
+    )
+    await expect(launch(restarted)).rejects.toThrow('agent_session_operation_unknown')
+    expect(deliverTerminalPrompt).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the recorded handle when the restarted host no longer has the pane', async () => {
+    await launchUntilPasteStarts(hostRuntime())
+
+    await restartHost()
+
+    await expect(launch(hostRuntime(), PROMPTED_LAUNCH, UPGRADED_PHONE)).resolves.toMatchObject({
+      outcome: { kind: 'terminal', handle: 'term_1', paneKey: PANE_KEY }
+    })
   })
 
   it('stays unknown when the host died before the surface was recorded', async () => {
@@ -193,9 +297,12 @@ describe('a host restart mid-launch', () => {
     expect(first.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
 
     await restartHost()
-    const restarted = hostRuntime()
+    const restarted = restartedHostRuntime()
 
-    await expect(launch(restarted)).resolves.toEqual(first)
+    await expect(launch(restarted)).resolves.toEqual({
+      ...first,
+      outcome: { ...first.outcome, handle: ADOPTED_HANDLE }
+    })
     expect(restarted.createTerminal).not.toHaveBeenCalled()
     expect(deliverTerminalPrompt).toHaveBeenCalledOnce()
   })
@@ -218,6 +325,50 @@ describe('a host restart mid-launch', () => {
     expect(outcome?.status === 'succeeded' && outcome.launch).toMatchObject({
       prompt: { outcome: 'handed-to-terminal' }
     })
+  })
+})
+
+describe('a final write that fails', () => {
+  it('leaves the prompt unconfirmed, or unknown to a caller that cannot read it, never "not sent"', async () => {
+    replaceLaunchWrite(store, 2, () => Promise.reject(new Error('SQLITE_BUSY')))
+    const host = hostRuntime()
+
+    const first = await launch(host)
+
+    // The live answer is the truth the host saw; only the record missed it.
+    expect(first.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    await expect(launch(host)).rejects.toThrow('agent_session_operation_unknown')
+    await expect(launch(host, PROMPTED_LAUNCH, UPGRADED_PHONE)).resolves.toMatchObject({
+      outcome: { kind: 'terminal', handle: 'term_1', paneKey: PANE_KEY },
+      prompt: { delivery: 'submit', outcome: 'unconfirmed' }
+    })
+    expect(host.createTerminal).toHaveBeenCalledOnce()
+    expect(deliverTerminalPrompt).toHaveBeenCalledOnce()
+  })
+})
+
+describe('the two writes', () => {
+  it('land in order when the paste returns before the first write has committed', async () => {
+    const recorded = vi.spyOn(store, 'recordOperationOutcome')
+
+    await launch(hostRuntime())
+
+    // Both were queued before either committed; the second is the one left standing.
+    const launchWrites = recorded.mock.calls.filter(([input]) => input.callerKey === 'device-1')
+    expect(launchWrites.map(([input]) => promptOutcome(input.outcome))).toEqual([
+      'unconfirmed',
+      'handed-to-terminal'
+    ])
+    expect(promptOutcome(row()?.outcome)).toBe('handed-to-terminal')
+  })
+
+  it('never lets a failed first write block the launch', async () => {
+    replaceLaunchWrite(store, 1, () => Promise.reject(new Error('SQLITE_BUSY')))
+
+    const first = await launch(hostRuntime())
+
+    expect(first.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(promptOutcome(row()?.outcome)).toBe('handed-to-terminal')
   })
 })
 
@@ -274,6 +425,30 @@ describe('the desktop launches replay-safely', () => {
     expect(replayed).toMatchObject({ ok: true, result: first.ok ? first.result : null })
     expect(host.createTerminal).toHaveBeenCalledOnce()
     expect(row('trusted-local:desktop')?.outcome.status).toBe('succeeded')
+  })
+
+  it('reads an unconfirmed prompt after a restart mid-paste, through its own IPC transport', async () => {
+    const request = {
+      id: 'request-1',
+      authToken: 'desktop-ipc',
+      method: 'agent.launchReplay',
+      params: PROMPTED_LAUNCH
+    }
+    deliverTerminalPrompt.mockImplementationOnce(() => new Promise<boolean>(() => {}))
+    void dispatcherFor(hostRuntime()).dispatch(request, DESKTOP_IPC)
+    const deadline = Date.now() + 2_000
+    while (row('trusted-local:desktop')?.outcome.status !== 'succeeded') {
+      if (Date.now() > deadline) {
+        throw new Error('the desktop launch was never recorded')
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    await ledgerWritesQueuedBefore(store)
+
+    await restartHost()
+    const replayed = await dispatcherFor(restartedHostRuntime()).dispatch(request, DESKTOP_IPC)
+
+    expect(replayed).toMatchObject({ ok: true, result: UNCONFIRMED_AGENT })
   })
 
   it('opens the ledger alone, never the chat host, to admit a terminal launch', async () => {

@@ -151,8 +151,9 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
   /**
    * Installs the structured agent-session host on first use. Lazy for the same
    * reason the orchestration DB is: the profile's user-data path is not final
-   * until the app is ready, and a runtime nobody drives a chat session on
-   * should never open the record store.
+   * until the app is ready, and a runtime nobody drives a chat session on never
+   * builds the chat host. The record store it sits on may already be open, from
+   * a launch's admission.
    */
   async ensureStructuredAgentSessionHost(): Promise<void> {
     await installStructuredAgentSessionHost({

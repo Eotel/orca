@@ -615,7 +615,7 @@ describe('the surface is published as the launch stands, before its prompt is de
     return { launch, published }
   }
 
-  it('records a prompt still owed as not delivered, then delivers it', async () => {
+  it('records a prompt still owed as unconfirmed, then delivers it', async () => {
     const { launch, published } = publishing({ settings: {}, lineCarriesPrompt: false })
 
     const result = await launch.run(PROMPTED_EXISTING)
@@ -626,10 +626,23 @@ describe('the surface is published as the launch stands, before its prompt is de
         outcome: { kind: 'terminal', handle: 'term_1' },
         worktreeId: 'wt-7',
         receipt: result.receipt,
-        prompt: { delivery: 'submit', outcome: 'not-delivered' }
+        // A host that stops mid-paste cannot say whether it landed, so it must not say "not sent".
+        prompt: { delivery: 'submit', outcome: 'unconfirmed' }
       }
     ])
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+  })
+
+  it('records a draft as not delivered, since the host never delivers one', async () => {
+    const { launch, published } = publishing({ settings: {}, lineCarriesPrompt: false })
+
+    const result = await launch.run({
+      ...PROMPTED_EXISTING,
+      prompt: { text: 'fix the build', delivery: 'draft' }
+    })
+
+    expect(published[0]?.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
+    expect(result.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
   })
 
   it('records a prompt the launch command carried as already handed over', async () => {
@@ -655,7 +668,7 @@ describe('the surface is published as the launch stands, before its prompt is de
     ])
     expect(published[0]).toEqual({
       ...result,
-      prompt: { delivery: 'submit', outcome: 'not-delivered' }
+      prompt: { delivery: 'submit', outcome: 'unconfirmed' }
     })
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'journaled', messageId: 'msg-1' })
   })

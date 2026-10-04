@@ -26,7 +26,10 @@ import {
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../shared/protocol-version'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
+import {
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from '../../shared/agent-launch-runtime-capability'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../shared/agent-session-background-task-child-views-capability'
 import { supportsAgentLaunch } from '../runtime/rpc/methods/agent-launch'
@@ -58,7 +61,7 @@ const REMOTE_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
 ]
 
 /** Gates the renderer must pass against its own main process. The Electron remote list omits all
- *  seven; mobile advertises the structured ones, so this is an Electron-remote gap rather than a
+ *  eight; mobile advertises the structured ones, so this is an Electron-remote gap rather than a
  *  statement that no remote client wants them. Why it is one is not recorded here. */
 const LOCAL_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
@@ -68,7 +71,9 @@ const LOCAL_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   // The desktop picks each launch mode itself; only its own host is told so far.
-  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  // Read by the desktop's own launches first; a remote host is told when its launches move over.
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY
 ]
 
 function missingFrom(

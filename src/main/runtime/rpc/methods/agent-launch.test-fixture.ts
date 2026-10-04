@@ -39,6 +39,9 @@ export type AgentLaunchRuntimeStubOptions = {
   terminalPaneAlreadyLive?: boolean
   /** What the runtime reports about an offered prompt's typed line; unset reports nothing. */
   lineCarriesPrompt?: boolean
+  /** Panes this runtime found already running, by the handle it issued them: a restarted host
+   *  adopting a surviving PTY issues a new handle for the same pane. */
+  adoptedPanes?: Record<string, string>
 }
 
 function reportPromptCarry(
@@ -60,6 +63,8 @@ export function setAgentLaunchRecordStore(store: AgentSessionRecordStore | null)
 
 export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
   const worktreeCreateResults = new Map<string, Promise<unknown>>()
+  // Only the panes this runtime created or adopted: a handle is process-scoped, a pane key is not.
+  const handlesByPaneKey = new Map(Object.entries(options.adoptedPanes ?? {}))
   const waitForSetupTerminalCompletion = vi.fn(
     async (_handle: string, _signal?: AbortSignal): Promise<{ exitCode: number | null }> => ({
       exitCode: 0
@@ -89,6 +94,9 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     showRepo: vi.fn(async () => ({ id: 'repo-1' })),
     createManagedWorktree: vi.fn(async (args: Record<string, unknown>) => {
       reportPromptCarry(options, args.onStartupPromptCarry, args.startupPrompt)
+      if (args.startupAgent && options.startupTerminalPaneKey) {
+        handlesByPaneKey.set(options.startupTerminalPaneKey, 'term_agent_first')
+      }
       return {
         worktree: { id: 'wt-new' },
         startupTerminal: args.startupAgent
@@ -107,6 +115,9 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
         throw new AgentLaunchPaneAlreadyLiveError()
       }
       reportPromptCarry(options, createOptions?.onStartupPromptCarry, createOptions?.startupPrompt)
+      if (options.terminalPaneKey) {
+        handlesByPaneKey.set(options.terminalPaneKey, 'term_1')
+      }
       return {
         handle: 'term_1',
         ...(options.terminalPaneKey ? { paneKey: options.terminalPaneKey } : {}),
@@ -114,6 +125,7 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       }
     }),
     showTerminal: vi.fn(async (handle: string) => ({ handle, worktreeId: 'wt-7' })),
+    getTerminalHandleForPaneKey: vi.fn((paneKey: string) => handlesByPaneKey.get(paneKey) ?? null),
     isTerminalRunningAgent: vi.fn(async () => true),
     showManagedTerminalWorkspace: vi.fn(async (selector: string) => ({
       id: selector.replace(/^id:/, '')

@@ -77,8 +77,9 @@ export type AgentLaunchExecution = {
 
 /**
  * The launch as it stands once its surface exists: a complete result whose prompt receipt says only
- * what creation itself settled — carried on the launch command, or not (yet) delivered. Complete so
- * a host that dies during the delivery still leaves a truthful answer behind.
+ * what creation itself settled — carried on the launch command, a draft the host never delivers, or
+ * a submit still `unconfirmed`. Complete so a host that dies during the delivery still leaves a
+ * truthful answer behind.
  */
 export type AgentLaunchPublishedSurface = AgentLaunchResult
 
@@ -109,7 +110,7 @@ export async function executeAgentLaunch(
       outcome: { kind: 'terminal', handle: intent.reuseTerminal.handle },
       worktreeId: existingWorktreeId(intent.target),
       receipt: preflight,
-      ...promptReceipt(intent, settledAtCreation({}))
+      ...promptReceipt(intent, settledAtCreation(intent, {}))
     })
     return {
       ...reused,
@@ -134,7 +135,7 @@ export async function executeAgentLaunch(
       worktreeId: placed.worktreeId,
       receipt: preflight,
       ...(placed.warning ? { warning: placed.warning } : {}),
-      ...promptReceipt(intent, settledAtCreation(placed))
+      ...promptReceipt(intent, settledAtCreation(intent, placed))
     })
     return {
       ...startup,
@@ -192,7 +193,7 @@ export async function executeAgentLaunch(
     worktreeId: placed.worktreeId,
     receipt: settled,
     ...(warning ? { warning } : {}),
-    ...promptReceipt(intent, settledAtCreation(created))
+    ...promptReceipt(intent, settledAtCreation(intent, created))
   })
   return {
     ...surface,

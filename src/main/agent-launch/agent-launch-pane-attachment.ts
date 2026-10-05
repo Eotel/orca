@@ -122,11 +122,13 @@ async function settleVerdict(
   pane: AgentSessionOperationOwnedPane,
   evidence: AgentLaunchPaneEvidence
 ): Promise<AgentLaunchPaneVerdict> {
+  let waitedForLaunch = false
   for (;;) {
     const running = runningLaunchesByPane.get(paneKeyOf(pane))
     if (!running) {
       break
     }
+    waitedForLaunch = true
     if ((await running.finished).tabTakenBack) {
       return { kind: 'withdrawn' }
     }
@@ -134,7 +136,9 @@ async function settleVerdict(
   if (evidence.isPaneLive(pane.paneKey)) {
     return { kind: 'proceed' }
   }
-  const final = evidence.launchPaneOnTab()?.outcome
+  // A launch that just settled here wrote the record; the tab's saved outcome may be an earlier
+  // launch's, not yet replaced on disk.
+  const final = waitedForLaunch ? undefined : evidence.launchPaneOnTab()?.outcome
   if (final) {
     return final
   }

@@ -73,7 +73,11 @@ export function publishAgentLaunchTab(
     // the same launch is that launch, so its tab and any final verdict stay as they are.
     const kept = store.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.agentLaunchPane
     if (kept?.leafId !== leafId || kept.operationId !== request.operationId) {
-      store.setTabAgentLaunchPane(tabId, launchPaneFor(request))
+      // A pane that already showed an earlier launch's outcome refused its spawn and is idle: it
+      // must spawn again, so it waits for this launch and attaches to its agent.
+      store.setTabAgentLaunchPane(tabId, launchPaneFor(request), {
+        remount: kept?.leafId === leafId && kept.outcome !== undefined
+      })
     }
     return { tabId, created: false, placement: { groupId } }
   }

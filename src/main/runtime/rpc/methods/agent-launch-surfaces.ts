@@ -158,6 +158,12 @@ export function agentLaunchSurfaceFactory(
         onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
       })
       const terminal = await created.catch(terminalSpawn.rethrow)
+      if (earlyTab?.closedByUser()) {
+        // Closed while its terminal was being created: stopped before any prompt is pasted. A prompt
+        // that rode the command line reached the agent, which is stopped a moment after it starts.
+        await context.runtime.closeTerminal(terminal.handle).catch(() => {})
+        throw new AgentLaunchTabClosedError()
+      }
       return {
         handle: terminal.handle,
         // The runtime already minted this pane and baked it into the PTY's env and its own reveal;

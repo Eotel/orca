@@ -134,8 +134,13 @@ export type TerminalActions = {
     }
   ) => void
   setTabColor: (tabId: string, color: string | null) => void
-  /** What the tab keeps about the launch that laid out one of its panes; undefined clears it. */
-  setTabAgentLaunchPane: (tabId: string, launchPane: TerminalTab['agentLaunchPane']) => void
+  /** What the tab keeps about the launch that laid out one of its panes; undefined clears it.
+   *  `remount` remounts the tab's panes, so one whose spawn was refused spawns again. */
+  setTabAgentLaunchPane: (
+    tabId: string,
+    launchPane: TerminalTab['agentLaunchPane'],
+    options?: { remount?: boolean }
+  ) => void
   /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
   updateTabPtyId: (
     tabId: string,

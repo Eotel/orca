@@ -1,6 +1,18 @@
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
+import {
+  discardStagedStartupCommand,
+  stageStartupCommand,
+  startupStagingFailureNotice,
+  type StartupCommandStaging
+} from '../../shared/startup-command-staging'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
+import {
+  LaunchFileUnavailableError,
+  removeLaunchFile,
+  writeSpawnLaunchFile
+} from '../../shared/launch-file-writing'
 import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result'
+import { unstagedAgentLineRefusal } from './unstaged-agent-line-refusal'
 import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import { normalizePtySize } from './daemon-pty-size'
 import { Session } from './session'
@@ -113,24 +125,41 @@ async function spawnAndPublishSession(
   // Why before the fork: the shell's own cwd may already have fallen back, so probe the requested path.
   const cwdReadableByDaemon =
     opts.cwd && !wslDistro ? await isCwdReadableByThisProcess(opts.cwd) : null
-  const subprocess = await deps.spawnSubprocess({
-    sessionId: opts.sessionId,
-    cols: size.cols,
-    rows: size.rows,
-    cwd: opts.cwd,
-    env: opts.env,
-    envToDelete: opts.envToDelete,
+  const wslDirectory =
+    wslDistro && opts.wslLaunchDirectory?.distro === wslDistro ? opts.wslLaunchDirectory : undefined
+  const launchFile = writeSpawnLaunchFile({
+    launchFile: opts.launchFile,
     command: opts.command,
-    startupCommandDelivery: opts.startupCommandDelivery,
-    ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
-    shellOverride: opts.shellOverride,
-    terminalShellArgs: opts.terminalShellArgs,
-    terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
-    terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
-    isCanceled: opts.isCanceled,
-    ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
+    env: opts.env,
+    wslDistro,
+    wslDirectory
   })
+  const command = launchFile?.command ?? opts.command
+  let subprocess: Awaited<ReturnType<typeof deps.spawnSubprocess>>
+  try {
+    subprocess = await deps.spawnSubprocess({
+      sessionId: opts.sessionId,
+      cols: size.cols,
+      rows: size.rows,
+      cwd: opts.cwd,
+      env: launchFile?.env ?? opts.env,
+      envToDelete: opts.envToDelete,
+      command,
+      startupCommandDelivery: opts.startupCommandDelivery,
+      ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      shellOverride: opts.shellOverride,
+      terminalShellArgs: opts.terminalShellArgs,
+      terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
+      terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
+      isCanceled: opts.isCanceled,
+      ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
+    })
+  } catch (error) {
+    removeLaunchFile(launchFile)
+    throw error
+  }
 
+  let staging: StartupCommandStaging | undefined
   // Why: a fallback shell does not emit the preferred shell's ready marker;
   // retaining the stale capability would indefinitely queue its first command.
   const shellReadySupported =
@@ -156,7 +185,11 @@ async function spawnAndPublishSession(
     onExit: createSessionExitHandler(
       deps.onSessionExit,
       opts.sessionId,
-      opts.agentSessionGeneration
+      opts.agentSessionGeneration,
+      () => {
+        discardStagedStartupCommand(staging)
+        removeLaunchFile(launchFile)
+      }
     ),
     ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
     ...(opts.shellReadyTimeoutMs !== undefined
@@ -168,6 +201,7 @@ async function spawnAndPublishSession(
     // Retain cleanup ownership if the native child refuses to exit.
     deps.sessions.set(opts.sessionId, session)
     await session.forceKillAndDisposeSubprocess()
+    removeLaunchFile(launchFile)
     if (deps.sessions.get(opts.sessionId) === session) {
       session.dispose()
       deps.sessions.delete(opts.sessionId)
@@ -176,31 +210,71 @@ async function spawnAndPublishSession(
     throw new TerminalAttachCanceledError(opts.sessionId)
   }
 
+  const startupCommandWritten = Boolean(command) && !subprocess.startupCommandDeliveredInShellArgs
+  if (startupCommandWritten && command) {
+    staging = stageStartupCommand({
+      command,
+      shellPath: subprocess.shellPath,
+      orcaBuiltLine: opts.launchAgent !== undefined,
+      wslDirectory
+    })
+    // Why refuse: typed in full, a long agent line can leave the shell at a quote prompt with the
+    // prompt lost while the launch reports success; the refusal hands the user the prompt instead.
+    const refusal = unstagedAgentLineRefusal({
+      command,
+      staging,
+      agentLaunch: opts.launchAgent !== undefined,
+      unstageableLine: opts.unstageableLine,
+      wslWithoutFolder: wslDistro !== undefined && wslDirectory === undefined
+    })
+    if (refusal !== null) {
+      deps.sessions.set(opts.sessionId, session)
+      await session.forceKillAndDisposeSubprocess()
+      removeLaunchFile(launchFile)
+      if (deps.sessions.get(opts.sessionId) === session) {
+        session.dispose()
+        deps.sessions.delete(opts.sessionId)
+        deps.onDeadSessionRemoved(opts.sessionId)
+      }
+      throw new LaunchFileUnavailableError(refusal, 'staged-line')
+    }
+  }
+
   deps.sessions.set(opts.sessionId, session)
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)
   const token = session.attachClient(opts.streamClient)
 
-  const startupCommandWritten =
-    Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs
   // Why: without this, a missing command and a lost one log identically.
   // Length, never the text -- launches can carry credentials.
   try {
     deps.reportReadinessEvent?.('startup-command-delivery', {
       sessionId: opts.sessionId,
       written: startupCommandWritten,
-      hasCommand: Boolean(opts.command),
-      commandLength: opts.command?.length ?? 0,
+      hasCommand: Boolean(command),
+      commandLength: command?.length ?? 0,
       viaShellArgs: subprocess.startupCommandDeliveredInShellArgs === true,
       queuedByShellReadyBarrier: shellReadySupported
     })
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
-  if (startupCommandWritten && opts.command) {
+  if (staging) {
+    const notice = startupStagingFailureNotice(staging)
+    if (notice) {
+      session.startupIngress.accept(notice)
+      try {
+        deps.reportReadinessEvent?.('startup-command-stage-failed', {
+          sessionId: opts.sessionId,
+          reason: staging.failure
+        })
+      } catch {
+        // Diagnostics must never turn a live PTY into a failed create.
+      }
+    }
     const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
     session.write(
-      buildStartupCommandSubmission(opts.command, {
+      buildStartupCommandSubmission(staging.command, {
         submit,
         bracketedPasteSafe: shellReadySupported
       })
@@ -222,9 +296,13 @@ async function spawnAndPublishSession(
 function createSessionExitHandler(
   onSessionExit: TerminalHostSessionCreateDependencies['onSessionExit'],
   sessionId: string,
-  generation: string | undefined
+  generation: string | undefined,
+  discardStagedCommand: () => void
 ): () => void {
-  return () => onSessionExit(sessionId, generation)
+  return () => {
+    discardStagedCommand()
+    onSessionExit(sessionId, generation)
+  }
 }
 
 // Why enumeration: a shell's cwd listing is what TCC withholds, and it can withhold it while

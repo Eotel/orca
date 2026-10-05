@@ -1,0 +1,217 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as AgentStatusModule from '@/lib/agent-status'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
+import { createTestStore } from '../store/slices/store-test-helpers'
+
+vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/lib/agent-status', async (importOriginal) => ({
+  ...(await importOriginal<typeof AgentStatusModule>()),
+  detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
+}))
+
+const testStore = vi.hoisted(() => {
+  const ref: { current: ReturnType<typeof createTestStore> | null } = { current: null }
+  return ref
+})
+vi.mock('@/store', () => ({
+  useAppStore: {
+    getState: () => {
+      if (!testStore.current) {
+        throw new Error('no test store')
+      }
+      return testStore.current.getState()
+    }
+  }
+}))
+const callRuntimeRpc = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  callRuntimeRpc
+}))
+
+createTabsSliceMockApi()
+
+const { launchAgentThroughHost } = await import('./agent-launch-through-host')
+const { agentLaunchPaneSpawnHold, releaseAgentLaunchPaneSpawn } =
+  await import('./agent-launch-pane-spawn-hold')
+const { agentLaunchPanePrompt } = await import('./agent-launch-pane-prompt')
+
+const WT = 'repo1::/tmp/feature'
+let store: ReturnType<typeof createTestStore>
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function rpcError(code: string): RuntimeRpcCallError {
+  return new RuntimeRpcCallError({
+    id: 'desktop-ipc',
+    ok: false,
+    error: { code, message: code },
+    _meta: { runtimeId: 'runtime-1' }
+  })
+}
+
+function terminalResult(paneKey: string, outcome: string) {
+  return {
+    outcome: { kind: 'terminal', handle: 'term_1', paneKey },
+    worktreeId: WT,
+    receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'x' },
+    prompt: { delivery: 'submit', outcome }
+  }
+}
+
+function launchTab(tabId: string) {
+  return store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === tabId)
+}
+
+function lastParams(): Record<string, unknown> {
+  return callRuntimeRpc.mock.calls.at(-1)![2] as Record<string, unknown>
+}
+
+function launch() {
+  return launchAgentThroughHost({
+    agent: 'claude',
+    worktreeId: WT,
+    groupId: store.getState().activeGroupIdByWorktree[WT],
+    prompt: 'fix the failing checks',
+    agentArgs: null,
+    launchSource: 'source_control_recovery'
+  })
+}
+
+/** What the host does first: it takes the pane, by asking this window to show the tab. */
+function hostTakesPane(tabId: string): void {
+  const leafId = launchTab(tabId)!.agentLaunchPane!.leafId
+  releaseAgentLaunchPaneSpawn(tabId, leafId)
+}
+
+beforeEach(() => {
+  store = createTestStore()
+  testStore.current = store
+  callRuntimeRpc.mockReset()
+  store.getState().setActiveWorktree(WT)
+  store.getState().createUnifiedTab(WT, 'terminal')
+})
+
+describe('a desktop launch through the host', () => {
+  it('shows its tab at the click, in its split, waiting for the host before it spawns', () => {
+    const reply = deferred<unknown>()
+    callRuntimeRpc.mockReturnValue(reply.promise)
+
+    const { tabId } = launch()
+
+    const tab = launchTab(tabId)!
+    expect(tab).toMatchObject({ ptyId: null, launchAgent: 'claude' })
+    const leafId = tab.agentLaunchPane!.leafId
+    expect(agentLaunchPaneSpawnHold(tabId, leafId)).not.toBeNull()
+    expect(agentLaunchPanePrompt(tabId)).toBe('fix the failing checks')
+    expect(store.getState().activeTabId).toBe(tabId)
+    expect(callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'agent.launchReplay', {
+      agent: 'claude',
+      target: { kind: 'existing', worktree: `id:${WT}` },
+      prompt: { text: 'fix the failing checks', delivery: 'submit' },
+      agentArgs: null,
+      launchSource: 'source_control_recovery',
+      placement: { groupId: store.getState().activeGroupIdByWorktree[WT] },
+      presentation: 'focused',
+      operationId: expect.stringMatching(/^\d+-[0-9a-f]{32}$/),
+      paneKey: `${tabId}:${leafId}`
+    })
+  })
+
+  it('names every click as its own operation', () => {
+    callRuntimeRpc.mockReturnValue(new Promise(() => {}))
+    launch()
+    const first = lastParams()
+    launch()
+    const second = lastParams()
+    expect(second.operationId).not.toBe(first.operationId)
+    expect(second.paneKey).not.toBe(first.paneKey)
+  })
+
+  it('reports the prompt delivered only on the host receipt', async () => {
+    const reply = deferred<unknown>()
+    callRuntimeRpc.mockReturnValue(reply.promise)
+    const { tabId, delivery } = launch()
+    hostTakesPane(tabId)
+
+    reply.resolve(terminalResult(lastParams().paneKey as string, 'handed-to-terminal'))
+
+    await expect(delivery).resolves.toEqual({ delivered: true, failureNotified: false })
+    expect(launchTab(tabId)).toBeDefined()
+  })
+
+  it('keeps the follow-up from running when the host did not deliver the prompt', async () => {
+    callRuntimeRpc.mockResolvedValue(terminalResult('tab:leaf', 'not-delivered'))
+    await expect(launch().delivery).resolves.toEqual({
+      delivered: false,
+      failureNotified: false,
+      reason: 'not-delivered'
+    })
+  })
+
+  it('takes its tab back on a refusal, before the pane ever spawns', async () => {
+    const reply = deferred<unknown>()
+    callRuntimeRpc.mockReturnValue(reply.promise)
+    const { tabId, delivery } = launch()
+
+    reply.reject(rpcError('agent_session_operation_conflict'))
+
+    await expect(delivery).resolves.toEqual({
+      delivered: false,
+      failureNotified: false,
+      reason: 'not-started'
+    })
+    expect(launchTab(tabId)).toBeUndefined()
+  })
+
+  it('leaves a launch the host took to its pane, which says how it ended', async () => {
+    const reply = deferred<unknown>()
+    callRuntimeRpc.mockReturnValue(reply.promise)
+    const { tabId, delivery } = launch()
+    hostTakesPane(tabId)
+
+    reply.reject(rpcError('agent_session_operation_unknown'))
+
+    await expect(delivery).resolves.toEqual({
+      delivered: false,
+      failureNotified: true,
+      reason: 'not-started'
+    })
+    expect(launchTab(tabId)).toBeDefined()
+  })
+
+  it('never leaves a pane the host did not take, which would open as a shell', async () => {
+    const reply = deferred<unknown>()
+    callRuntimeRpc.mockReturnValue(reply.promise)
+    const { tabId, delivery } = launch()
+
+    reply.reject(rpcError('worktree_not_found'))
+
+    await expect(delivery).resolves.toMatchObject({ delivered: false, failureNotified: false })
+    expect(launchTab(tabId)).toBeUndefined()
+  })
+
+  it('still starts the agent when the launch record is full', async () => {
+    callRuntimeRpc
+      .mockRejectedValueOnce(rpcError('agent_session_operation_capacity'))
+      .mockResolvedValueOnce(terminalResult('other-tab:leaf', 'handed-to-terminal'))
+    const { tabId, delivery } = launch()
+
+    await expect(delivery).resolves.toEqual({ delivered: true, failureNotified: false })
+    // The unrecorded launch shows its own tab when the agent spawns.
+    expect(launchTab(tabId)).toBeUndefined()
+    const [, method, params] = callRuntimeRpc.mock.calls[1]!
+    expect(method).toBe('agent.launch')
+    expect(params).not.toHaveProperty('operationId')
+    expect(params).not.toHaveProperty('paneKey')
+  })
+})

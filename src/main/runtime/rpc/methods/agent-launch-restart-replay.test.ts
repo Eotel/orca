@@ -85,7 +85,13 @@ let store: AgentSessionRecordStore
 function hostRuntime(adoptedPanes?: Record<string, string>) {
   // A phone's launch into an existing workspace also moves the phone's own view to the new tab.
   return Object.assign(
-    runtimeStub({ settings: TERMINAL_ONLY, terminalPaneKey: PANE_KEY, adoptedPanes }),
+    // The paste path: the carry rule leaves this prompt for after the agent is ready.
+    runtimeStub({
+      settings: TERMINAL_ONLY,
+      terminalPaneKey: PANE_KEY,
+      adoptedPanes,
+      lineCarriesPrompt: false
+    }),
     { selectCreatedMobileSessionTabForClient: vi.fn(() => true) }
   )
 }

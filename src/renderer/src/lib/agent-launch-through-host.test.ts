@@ -184,6 +184,22 @@ describe('a desktop launch through the host', () => {
     expect(launchTab(tabId)).toBeUndefined()
   })
 
+  it('takes back a tab the host took and then refused, so no pane is left with nothing to say', async () => {
+    const reply = deferred<unknown>()
+    callRuntimeRpc.mockReturnValue(reply.promise)
+    const { tabId, delivery } = launch()
+    hostTakesPane(tabId)
+
+    reply.reject(rpcError('agent_session_operation_expired'))
+
+    await expect(delivery).resolves.toEqual({
+      kind: 'not-started',
+      unconfirmed: false,
+      code: 'agent_session_operation_expired'
+    })
+    expect(launchTab(tabId)).toBeUndefined()
+  })
+
   it('leaves a launch the host took to its pane, which says how it ended', async () => {
     const reply = deferred<unknown>()
     callRuntimeRpc.mockReturnValue(reply.promise)

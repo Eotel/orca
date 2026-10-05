@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch-runtime-capability'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -196,6 +197,39 @@ describe('the + menu', () => {
     // Read at once: the host published the tab before replying.
     expect(state.fetchSessionTabs).toHaveBeenCalledTimes(1)
     expect(state.scheduleDelayedAction).not.toHaveBeenCalled()
+  })
+
+  it('asks a host that places tabs to put the new one after the tab the user is on', async () => {
+    const { client, sendRequest } = scriptedClient(
+      launchReply({ kind: 'terminal', handle: 'term_7' })
+    )
+    const state = scope(client, [...LAUNCH_CAPABILITIES, AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY])
+    state.sessionTabsRef.current = [
+      {
+        type: 'terminal',
+        id: 'existing-tab',
+        parentTabId: 'host-tab-1',
+        leafId: 'leaf-1',
+        title: 'Terminal',
+        terminal: 'term_1',
+        isActive: true
+      }
+    ]
+
+    await create_(state, 'claude')
+
+    // A terminal pane is listed under its parent tab; that is the id the host places by.
+    expect(launchParams(sendRequest)).toMatchObject({ placement: { afterTabId: 'host-tab-1' } })
+  })
+
+  it('sends no placement to a host that would not read it', async () => {
+    const { client, sendRequest } = scriptedClient(
+      launchReply({ kind: 'terminal', handle: 'term_7' })
+    )
+
+    await create_(scope(client), 'claude')
+
+    expect(launchParams(sendRequest)).not.toHaveProperty('placement')
   })
 
   it('waits for a chat by its session id, not a predicted tab id', async () => {

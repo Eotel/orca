@@ -6,7 +6,11 @@
  * every outcome is unit-testable.
  */
 
-import type { AgentLaunchPrompt, AgentLaunchResult } from '../../../src/shared/agent-launch-intent'
+import type {
+  AgentLaunchPlacement,
+  AgentLaunchPrompt,
+  AgentLaunchResult
+} from '../../../src/shared/agent-launch-intent'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { makePaneKey } from '../../../src/shared/stable-pane-id'
 import { createStructuredAgentSessionId } from '../../../src/shared/structured-agent-session-create'
@@ -91,6 +95,7 @@ export async function launchAgentInExistingWorkspace(args: {
   prompt?: AgentLaunchPrompt
   launchSource?: string
   reservation?: MobileAgentLaunchReservation
+  placement?: AgentLaunchPlacement
   // Injected in tests; each call is one new operation, so a later tap never replays this one.
   mintOperationId?: () => string
 }): Promise<MobileExistingAgentLaunch> {
@@ -103,6 +108,7 @@ export async function launchAgentInExistingWorkspace(args: {
     operationId: (args.mintOperationId ?? structuredSessionOperationId)(),
     ...(args.prompt ? { prompt: args.prompt } : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
+    ...(args.placement ? { placement: args.placement } : {}),
     ...(args.reservation
       ? {
           paneKey: makePaneKey(args.reservation.pane.tabId, args.reservation.pane.leafId),

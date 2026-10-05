@@ -115,6 +115,18 @@ describe('reserveMobileAgentLaunch', () => {
     })
   })
 
+  it('asks for the new tab after the one the user is on', async () => {
+    const { client, sendRequest } = scriptedClient(launched({}))
+    await launch(client, {
+      placement: { afterTabId: 'tab-current' },
+      mintOperationId: () => '1790000000000-' + 'b'.repeat(32)
+    })
+
+    expect(requestParam(sendRequest.mock.calls[0]![1], 'placement')).toEqual({
+      afterTabId: 'tab-current'
+    })
+  })
+
   it('mints a pane the host adopts even where the runtime has no crypto.randomUUID', () => {
     const native = Object.getOwnPropertyDescriptor(globalThis.crypto, 'randomUUID')
     Object.defineProperty(globalThis.crypto, 'randomUUID', { value: undefined, configurable: true })

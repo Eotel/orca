@@ -217,7 +217,7 @@ async function executeReplaySafeAgentLaunch(
     // (a replay can remake the tab of an agent that survived).
     early?.finish()
     if (admission.decision === 'refuse') {
-      throw new Error(admission.refusal.code)
+      throw Object.assign(new Error(admission.refusal.code), { code: admission.refusal.code })
     }
     return admission.result
   }

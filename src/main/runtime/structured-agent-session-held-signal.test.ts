@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 /**
  * "This machine holds a structured chat" against a real host and record store. Session history,
  * resume preparation and replay-safe phone launches all open the record store for a user who never
@@ -23,10 +24,10 @@ import {
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
 
-vi.mock('../ai-vault/session-scanner-worker-spawn', () => ({
-  scanAiVaultSessionsInWorker: vi.fn(),
-  resolveAiVaultSessionTitlesInWorker: vi.fn(),
-  resetAiVaultScannerWorkerForTests: vi.fn()
+vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  scanAiVaultSessionsInService: vi.fn(),
+  resolveAiVaultSessionTitlesInService: vi.fn()
 }))
 
 const { AI_VAULT_METHODS } = await import('./rpc/methods/ai-vault')

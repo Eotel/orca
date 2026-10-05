@@ -44,6 +44,14 @@ import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-s
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
+/** The launch record is the first thing an agent launch reads; opening it at startup keeps its cold
+ *  open off the first click. Admission still opens it on demand if this fails. */
+function warmAgentLaunchRecordStore(runtime: RuntimeService): void {
+  runtime.openAgentSessionRecordStore().catch((error: unknown) => {
+    console.warn('[agent-launch] could not open the launch record at startup', error)
+  })
+}
+
 export type MainProcessRuntimeLaunchOptions = {
   openMainWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
   handleMacAppActivation: () => void
@@ -158,6 +166,7 @@ async function launchServeMode(
   }
   // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  warmAgentLaunchRecordStore(runtime)
   await runtimeRpc.start().catch((error) => {
     console.error('[runtime] Failed to start headless RPC transport:', error)
     throw error
@@ -214,6 +223,7 @@ async function launchServeMode(
 }
 
 async function launchDesktopMode(
+  runtime: RuntimeService,
   runtimeRpc: OrcaRuntimeRpcServer,
   shellPathReady: Promise<void>,
   desktopWindow: BrowserWindow | null,
@@ -237,6 +247,8 @@ async function launchDesktopMode(
         }
       )
   ])
+  // Why after the window: the open is synchronous disk work the first paint should not wait for.
+  warmAgentLaunchRecordStore(runtime)
   if (!runtimeRpcStartResult.ok) {
     // Why gated: this dialog is the only launch-phase text read through translateMain, and i18n
     // now settles alongside this phase — without the wait a non-English user could get the
@@ -342,5 +354,11 @@ export async function initializeMainProcessRuntimeLaunch(
     await launchServeMode(runtime, runtimeRpc, serveOptions)
     return
   }
-  await launchDesktopMode(runtimeRpc, shellPathReady, desktopWindow, options.openMainWindow)
+  await launchDesktopMode(
+    runtime,
+    runtimeRpc,
+    shellPathReady,
+    desktopWindow,
+    options.openMainWindow
+  )
 }

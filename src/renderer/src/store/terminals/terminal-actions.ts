@@ -69,7 +69,7 @@ export type TerminalActions = {
     options?: {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
-      /** Stable leaf identity for adopting an already-live pane without changing its pane key. */
+      /** Stable leaf identity: an already-live pane's, or a host launch's pane before its process. */
       initialLeafId?: string
       /** Published atomically with the tab so its first mount cannot spawn a bare shell. */
       pendingStartup?: TerminalState['pendingStartupByTabId'][string]

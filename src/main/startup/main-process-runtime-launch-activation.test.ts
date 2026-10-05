@@ -121,6 +121,11 @@ describe('desktop startup activation', () => {
   let windows: FakeWindow[]
   let ipcHandles: Set<string>
   let trustedRendererId: number | null
+  let windowsWhenRecordStoreOpened: number | null
+  const openRecordStore = vi.fn(() => {
+    windowsWhenRecordStoreOpened = windows.length
+    return Promise.resolve()
+  })
 
   // Mirrors openMainWindow's non-idempotent side effects that broke in the field.
   function openMainWindow(): FakeWindow {
@@ -149,12 +154,16 @@ describe('desktop startup activation', () => {
     showWindowWithoutStealingFocus.mockClear()
     ipcHandles = new Set()
     trustedRendererId = null
+    windowsWhenRecordStoreOpened = null
+    openRecordStore.mockClear()
     launchHooks.duringInstallDirRepair = () => {}
     launchHooks.failBeforeWindow = false
     state.mainWindow = null
     state.isServeMode = false
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only null-checks the runtime before the mocked RPC server takes it.
-    state.runtime = {} as NonNullable<typeof state.runtime>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only null-checks the runtime and warms its launch record before the mocked RPC server takes it.
+    state.runtime = {
+      openAgentSessionRecordStore: openRecordStore
+    } as unknown as NonNullable<typeof state.runtime>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only calls whenReady().
     state.windowsShellPathHydration = {
       whenReady: () => Promise.resolve()
@@ -202,6 +211,17 @@ describe('desktop startup activation', () => {
       expect(state.desktopActivationGate?.getState()).toBe('ready')
     }
   )
+
+  it('opens the launch record at startup, after the window, so the first agent launch does not', async () => {
+    await initializeMainProcessReady({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only calls once() on the returned window.
+      openMainWindow: () => openMainWindow() as unknown as NonNullable<typeof state.mainWindow>,
+      handleMacAppActivation: vi.fn()
+    })
+
+    expect(openRecordStore).toHaveBeenCalledTimes(1)
+    expect(windowsWhenRecordStoreOpened).toBe(1)
+  })
 
   it('does not replay an activation when launch fails before the startup window', async () => {
     launchHooks.duringInstallDirRepair = () => state.desktopActivationGate?.requestActivation()

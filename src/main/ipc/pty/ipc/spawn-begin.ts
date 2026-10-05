@@ -1,4 +1,5 @@
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { awaitAgentLaunchPaneAttachment } from '../../../agent-launch/agent-launch-pane-attachment'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import type { PtySpawnResult } from '../../../providers/types'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
@@ -37,6 +38,14 @@ export async function beginPtyIpcSpawn(
   ctx: PtyIpcSpawnState
 ): Promise<PtySpawnResult | { isReattach: true } | null> {
   const args = ctx.args
+  // A launch-owned pane attaches to the host's process or shows the launch's failure, never a shell.
+  // A replacing spawn already holds the pane: the user restarted it, and that is theirs to run.
+  const launchOwned = ctx.paneSpawnReservation
+    ? null
+    : awaitAgentLaunchPaneAttachment(args.worktreeId, resolveEarlyPaneKey(args))
+  if (launchOwned) {
+    await launchOwned
+  }
   ctx.codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
   ctx.codexHomeLaunchStartedSequence = !args.connectionId
     ? allocatePtyLifecycleSequence()

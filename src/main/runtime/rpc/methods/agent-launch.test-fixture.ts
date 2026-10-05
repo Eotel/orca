@@ -11,6 +11,10 @@ import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch
 import type { RpcContext } from '../core'
 import { resolveRpcCallerIdentity } from '../rpc-caller-identity'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type {
+  AgentLaunchTabPublished,
+  AgentLaunchTabPublishRequest
+} from '../../../../shared/agent-launch-tab-publication'
 
 export const STRUCTURED_PREFERENCE = {
   experimentalNativeChat: true,
@@ -42,6 +46,10 @@ export type AgentLaunchRuntimeStubOptions = {
   /** Panes this runtime found already running, by the handle it issued them: a restarted host
    *  that could not re-adopt a surviving PTY's handle issues a new one for the same pane. */
   adoptedPanes?: Record<string, string>
+  /** A window owning the layout, answering an early tab publish; absent models a host with none. */
+  publishAgentLaunchTab?: (
+    request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
+  ) => Promise<AgentLaunchTabPublished> | null
 }
 
 function reportPromptCarry(
@@ -146,7 +154,13 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       }
       return launchRecordStore
     }),
-    waitForSetupTerminalCompletion
+    waitForSetupTerminalCompletion,
+    canPublishAgentLaunchTab: vi.fn(() => options.publishAgentLaunchTab !== undefined),
+    publishAgentLaunchTab: vi.fn(
+      (request: Omit<AgentLaunchTabPublishRequest, 'requestId'>) =>
+        options.publishAgentLaunchTab?.(request) ?? null
+    ),
+    withdrawAgentLaunchTab: vi.fn((_tabId: string) => {})
   }
 }
 

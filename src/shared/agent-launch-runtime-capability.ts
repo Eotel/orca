@@ -34,10 +34,16 @@ export const AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY =
 export const AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY =
   'agent.launch.prompt-unconfirmed.v1' as const
 
+// A host that reads `placement` and `presentation` and publishes the tab before it admits the launch.
+// A client advertising it reads a listed launch tab with no terminal yet as "not started", never as
+// proof the agent runs; only then does the host publish a paired caller's tab that early.
+export const AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY = 'agent.launch.placement.v1' as const
+
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY
 ] as const

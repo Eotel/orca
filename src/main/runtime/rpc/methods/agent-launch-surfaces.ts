@@ -44,7 +44,9 @@ export function agentLaunchSurfaceFactory(
   operationCallerKey?: string,
   // True when the launch shows its surface to the paired caller itself rather than to everyone.
   callerPresentsSurface = false,
-  terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch()
+  terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch(),
+  // The window already showed this launch's tab and moved whoever should move; the spawn binds it.
+  tabAlreadyPublished = false
 ): AgentLaunchSurfaceFactory {
   return {
     createStructuredSession: async ({
@@ -118,7 +120,8 @@ export function agentLaunchSurfaceFactory(
       cwd,
       launchSource,
       paneKey,
-      options
+      options,
+      viewMode
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
       let promptRodeLaunchCommand = false
@@ -143,6 +146,8 @@ export function agentLaunchSurfaceFactory(
         // A live reserved pane would be attached, not launched into, so the runtime refuses it.
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),
+        ...(viewMode ? { viewMode } : {}),
+        ...(tabAlreadyPublished ? { surfaceOwner: false as const } : {}),
         onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
       })
       const terminal = await created.catch(terminalSpawn.rethrow)

@@ -1,6 +1,10 @@
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
+import type {
+  AgentLaunchTabPublished,
+  AgentLaunchTabPublishRequest
+} from '../../shared/agent-launch-tab-publication'
 import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 
@@ -12,6 +16,27 @@ class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
     // module registers the generation bump at load; a headless host never loads it.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
+  }
+
+  /** Whether a window owns the layout and can show a launch's tab ahead of its process. */
+  canPublishAgentLaunchTab(): boolean {
+    return Boolean(this.notifier?.publishAgentLaunchTab && this.getAvailableAuthoritativeWindow())
+  }
+
+  /** Shows an agent launch's tab before its process exists, in the window that owns the layout;
+   *  null when no window does, and the launch's tab then appears when it spawns, as before. */
+  publishAgentLaunchTab(
+    request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
+  ): Promise<AgentLaunchTabPublished> | null {
+    if (!this.notifier?.publishAgentLaunchTab || !this.getAvailableAuthoritativeWindow()) {
+      return null
+    }
+    return this.notifier.publishAgentLaunchTab(request)
+  }
+
+  /** Takes back a tab published for a launch that did not run into it. */
+  withdrawAgentLaunchTab(tabId: string): void {
+    this.notifier?.closeTerminal(tabId)
   }
 }
 type OrcaRuntimeServiceExport = RuntimeCommandSurfaceHost<OrcaRuntimeService>

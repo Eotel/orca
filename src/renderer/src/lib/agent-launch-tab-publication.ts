@@ -1,0 +1,119 @@
+/**
+ * Showing an `agent.launch` tab the host asked for before its agent exists.
+ *
+ * The tab is created under the host's ids so the pane key the host bakes into the agent's PTY names
+ * this pane, and a retry that names the same tab finds it instead of making a second one. The pane
+ * is laid out with no process; its own spawn waits in main for the host's and attaches to it.
+ */
+
+import type { AgentLaunchPlacementReceipt } from '../../../shared/agent-launch-intent'
+import type {
+  AgentLaunchTabPublished,
+  AgentLaunchTabPublishRequest
+} from '../../../shared/agent-launch-tab-publication'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
+import {
+  activateTerminalInitiatedWorktree,
+  focusTerminalInitiatedTab
+} from '../hooks/ipc-events/terminal-command-state'
+import { useAppStore } from '../store'
+import { resolveUnifiedTabCreatePlacement } from '../store/slices/tabs/tabs-create-placement'
+import { insertUnifiedTabAfterAnchor } from './unified-tab-anchor-insertion'
+
+function landedGroupId(worktreeId: string, tabId: string): string | undefined {
+  return useAppStore
+    .getState()
+    .unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.entityId === tabId)?.groupId
+}
+
+function placementFallback(
+  request: AgentLaunchTabPublishRequest,
+  landed: string,
+  anchored: boolean
+): AgentLaunchPlacementReceipt['fallback'] {
+  const { groupId, afterTabId } = request.placement ?? {}
+  if (groupId !== undefined) {
+    return landed === groupId ? undefined : anchored ? 'anchor-group' : 'active-group'
+  }
+  return afterTabId !== undefined && !anchored ? 'active-group' : undefined
+}
+
+export function publishAgentLaunchTab(
+  request: AgentLaunchTabPublishRequest
+): AgentLaunchTabPublished {
+  const { worktreeId, tabId, leafId } = request
+  const store = useAppStore.getState()
+  const owner = Object.entries(store.tabsByWorktree).find(([, tabs]) =>
+    tabs.some((tab) => tab.id === tabId)
+  )?.[0]
+  if (owner !== undefined) {
+    // A retry naming the same tab: never a second one, and never another workspace's tab.
+    if (owner !== worktreeId) {
+      throw new Error('agent_launch_tab_id_taken')
+    }
+    const groupId = landedGroupId(worktreeId, tabId)
+    if (!groupId) {
+      throw new Error('agent_launch_tab_unplaced')
+    }
+    return { tabId, created: false, placement: { groupId } }
+  }
+
+  const placement = resolveUnifiedTabCreatePlacement({
+    groups: store.groupsByWorktree[worktreeId] ?? [],
+    tabs: store.unifiedTabsByWorktree[worktreeId] ?? [],
+    activeGroupId: store.activeGroupIdByWorktree[worktreeId],
+    targetGroupId: request.placement?.groupId,
+    afterTabId: request.placement?.afterTabId,
+    lookupWorktrees: () =>
+      [
+        ...(store.allWorktrees?.() ?? []),
+        ...(store.folderWorkspaces ?? []).map(folderWorkspaceToWorktree)
+      ].filter((worktree) => worktree.id === worktreeId)
+  })
+  const focuses = request.viewer === 'focus-window' || request.viewer === 'focus-in-workspace'
+  if (request.viewer === 'focus-window') {
+    activateTerminalInitiatedWorktree(store, worktreeId)
+  }
+  const tab = store.createTab(worktreeId, placement.groupId, undefined, {
+    id: tabId,
+    initialLeafId: leafId,
+    launchAgent: request.launchAgent,
+    viewMode: request.viewMode,
+    ...(focuses ? {} : { activate: false, recordInteraction: false })
+  })
+  if (tab.id !== tabId) {
+    // createTab mints a fresh id on a collision it saw and we did not; that tab would never attach.
+    useAppStore.getState().closeTab(tab.id, { recordInteraction: false })
+    throw new Error('agent_launch_tab_id_taken')
+  }
+  if (placement.anchorTabId) {
+    const unifiedTabId = useAppStore
+      .getState()
+      .unifiedTabsByWorktree[worktreeId]?.find((item) => item.entityId === tab.id)?.id
+    if (unifiedTabId) {
+      insertUnifiedTabAfterAnchor(worktreeId, unifiedTabId, placement.anchorTabId)
+    }
+  }
+  const current = useAppStore.getState()
+  // The desktop's own launch stays in its workspace: the window follows only if it is still there.
+  const windowShowsTab =
+    request.viewer === 'focus-window' ||
+    (request.viewer === 'focus-in-workspace' && current.activeWorktreeId === worktreeId)
+  if (windowShowsTab) {
+    current.setActiveTabType('terminal', worktreeId)
+    current.setActiveTab(tab.id)
+  }
+  if (windowShowsTab || request.viewer === 'reveal-owner') {
+    if (request.viewer !== 'focus-in-workspace') {
+      current.revealWorktreeInSidebar(worktreeId)
+    }
+    focusTerminalInitiatedTab(tab.id, leafId, worktreeId)
+  }
+  const landed = landedGroupId(worktreeId, tab.id) ?? placement.groupId ?? ''
+  const fallback = placementFallback(request, landed, placement.anchorTabId !== undefined)
+  return {
+    tabId: tab.id,
+    created: true,
+    placement: { groupId: landed, ...(fallback ? { fallback } : {}) }
+  }
+}

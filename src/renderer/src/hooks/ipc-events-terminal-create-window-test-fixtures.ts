@@ -98,6 +98,7 @@ export function buildTerminalCreateWindow(args: {
         },
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate,
+        onPublishAgentLaunchTab: () => () => {},
         onSplitTerminal: () => () => {},
         onRenameTerminal: () => () => {},
         onFocusTerminal: (

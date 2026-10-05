@@ -50,4 +50,28 @@ describe('agent.launch params', () => {
     expect(parsed.data).not.toHaveProperty('paneKey')
     expect(parsed.data).not.toHaveProperty('sessionId')
   })
+
+  it('reads placement and presentation, and never refuses a launch over either', () => {
+    const parsed = AgentLaunch.parse({
+      ...BASE,
+      placement: { groupId: 'group-1', afterTabId: 'tab-1', splitDirection: 'right' },
+      presentation: 'background'
+    })
+    expect(parsed.placement).toEqual({ groupId: 'group-1', afterTabId: 'tab-1' })
+    expect(parsed.presentation).toBe('background')
+    // A word added later reads as absent: it is about the view, not whether the agent runs.
+    expect(AgentLaunch.parse({ ...BASE, presentation: 'peek' }).presentation).toBeUndefined()
+  })
+
+  it('lets a host from before placement drop it rather than refuse the launch', () => {
+    const olderHost = AgentLaunchFields.omit({ placement: true, presentation: true })
+    const parsed = olderHost.safeParse({
+      ...BASE,
+      placement: { groupId: 'group-1' },
+      presentation: 'focused'
+    })
+    expect(parsed.success).toBe(true)
+    expect(parsed.data).not.toHaveProperty('placement')
+    expect(parsed.data).not.toHaveProperty('presentation')
+  })
 })

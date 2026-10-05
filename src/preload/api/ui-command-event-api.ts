@@ -1,6 +1,10 @@
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type {
+  AgentLaunchTabPublishReply,
+  AgentLaunchTabPublishRequest
+} from '../../shared/agent-launch-tab-publication'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type {
@@ -180,6 +184,8 @@ export type UiCommandEventApi = {
     callback: (data: { worktreeId: string; tabId?: string; ptyId?: string }) => void
   ) => () => void
   replyTerminalCreate: (reply: TerminalTabCreateReply) => void
+  onPublishAgentLaunchTab: (callback: (data: AgentLaunchTabPublishRequest) => void) => () => void
+  replyAgentLaunchTabPublish: (reply: AgentLaunchTabPublishReply) => void
   onSplitTerminal: (
     callback: (data: {
       tabId: string

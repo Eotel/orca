@@ -6,6 +6,8 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch-tab-publication'
 import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 
 class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
@@ -37,6 +39,16 @@ class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
   /** Takes back a tab published for a launch that did not run into it. */
   withdrawAgentLaunchTab(tabId: string): void {
     this.notifier?.closeTerminal(tabId)
+  }
+
+  /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */
+  hasLiveTerminalForPaneKey(paneKey: string): boolean {
+    return this.getPtyRecordForPaneKey(paneKey)?.connected === true
+  }
+
+  /** The launch record when it is already open, for a reader that must not wait for it. */
+  openedAgentSessionRecordStore(): AgentSessionRecordStore | null {
+    return peekOpenedAgentSessionRecordStore()
   }
 }
 type OrcaRuntimeServiceExport = RuntimeCommandSurfaceHost<OrcaRuntimeService>

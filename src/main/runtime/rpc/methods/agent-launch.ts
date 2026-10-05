@@ -98,7 +98,7 @@ async function runAgentLaunch(
       replaySafe?.callerKey,
       callerNavigationId !== null,
       replaySafe?.terminalSpawn,
-      view.early !== null
+      () => view.early?.windowShowsTab() === true
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
@@ -113,17 +113,14 @@ async function runAgentLaunch(
   return withPlacement(result, view)
 }
 
-/** Runs a launch whose tab may already be showing: a throw shows in that tab's pane, and a tab the
- *  launch never ran into is taken back. */
+/** Runs a launch whose tab may already be showing. Its pane reads how the launch ended off the
+ *  launch record, which every path below settles before this returns. */
 async function withEarlyTab<T>(
   early: EarlyAgentLaunchTab | null,
   run: () => Promise<T>
 ): Promise<T> {
   try {
     return await run()
-  } catch (error) {
-    early?.failed(error instanceof AgentLaunchExecutionError ? error.cause : error)
-    throw error
   } finally {
     early?.finish()
   }
@@ -143,13 +140,12 @@ function runLegacyAgentLaunch(
   params: AgentLaunchParams,
   context: RpcContext
 ): Promise<AgentLaunchResult> {
-  const execute = async () => {
-    const early = await publishEarlyTab(params, context)
-    const view = { early, presentation: params.presentation }
-    return withEarlyTab(early, async () =>
-      runAgentLaunch(await resolveUnlaunchedIntent(params, context.runtime, early), context, view)
-    )
-  }
+  // No early tab: without a launch record its pane could not learn how the launch ended.
+  const execute = async () =>
+    runAgentLaunch(await resolveUnlaunchedIntent(params, context.runtime, null), context, {
+      early: null,
+      presentation: params.presentation
+    })
   if (params.target.kind === 'create-worktree' && params.target.create.clientMutationId) {
     return context.runtime.dedupeWorktreeCreate(
       params.target.create.repo,
@@ -205,19 +201,27 @@ async function executeReplaySafeAgentLaunch(
   const early = await publishEarlyTab(params, context)
   let admission: Awaited<ReturnType<typeof admitAgentLaunchOperation>>
   try {
-    admission = await admitAgentLaunchOperation(context, params, fingerprint)
+    admission = await admitAgentLaunchOperation(
+      context,
+      params,
+      fingerprint,
+      Date.now(),
+      early?.ownedPane
+    )
   } catch (error) {
     early?.finish()
     throw error
   }
   if (admission.decision !== 'execute') {
-    // Nothing runs under this request, so its tab, if it made one, goes.
+    // Nothing runs under this request. A tab it made goes, unless an agent still runs in its pane
+    // (a replay can remake the tab of an agent that survived).
     early?.finish()
     if (admission.decision === 'refuse') {
       throw new Error(admission.refusal.code)
     }
     return admission.result
   }
+  early?.executing()
   return withEarlyTab(early, () =>
     executeAdmittedAgentLaunch(params, context, admission, {
       early,

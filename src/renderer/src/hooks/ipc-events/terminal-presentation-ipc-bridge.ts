@@ -39,6 +39,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         focus,
         presentation,
         surfaceOwner,
+        launchTabShown,
         tabId,
         leafId,
         splitFromLeafId,
@@ -58,6 +59,12 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             activateTerminalInitiatedWorktree(store, worktreeId)
           }
           const worktreeTabs = store.tabsByWorktree[worktreeId] ?? []
+          if (launchTabShown && ptyId && tabId && !worktreeTabs.some((t) => t.id === tabId)) {
+            // The user closed the launch's tab while it waited. That close wins: the tab stays
+            // closed, and its agent stops, as closing any tab stops what runs in it.
+            void window.api.pty.kill(ptyId)
+            throw new Error('agent_launch_tab_closed')
+          }
           // Why: a split pane revealed from mobile is only bound in the persisted
           // layout until its pane mounts; missing it minted a duplicate tab (#10486).
           const ownership = ptyId

@@ -1,117 +1,148 @@
 /**
- * Panes whose process belongs to an `agent.launch` that has not spawned it yet.
+ * What a pane may do when an `agent.launch` showed it before its agent existed.
  *
- * The launch publishes its tab before it admits the request, so the window can mount the pane while
- * the host is still deciding and spawning. That pane's own `pty:spawn` must wait for the host's
- * process and attach to it, and must never fall back to a plain shell: a failed launch shows its
- * failure in the pane instead. The marker is in memory only; it dies with the process, and failures
- * are capped so a pane that never mounts cannot hold one forever.
+ * Derived on every spawn, never stored. The launch record (the operation ledger) names the launch
+ * that owns the pane and how it ended, and survives a restart; the runtime says whether a process
+ * holds the pane now. The one in-memory fact is a launch still running in this process, which dies
+ * with that launch: the pane waits for it, then reads the record like any later mount would.
  */
 
-import { formatAgentLaunchPaneFailure } from '../../shared/agent-launch-pane-failure'
+import {
+  listAgentSessionOperationRowsOwningPane,
+  type AgentSessionOperationOwnedPane,
+  type AgentSessionOperationRow
+} from '../../shared/agent-session-operation-ledger'
+import { isAgentLaunchResult } from '../../shared/agent-launch-intent'
+import type { AgentLaunchPaneVerdict } from '../../shared/agent-launch-pane-verdict'
 
-type Settlement = { kind: 'launched' } | { kind: 'failed'; message: string } | { kind: 'withdrawn' }
+type RunningLaunch = { finished: Promise<{ tabTakenBack: boolean }> }
 
-type PendingEntry = {
-  state: 'pending'
-  settled: Promise<Settlement>
-}
-type FailedEntry = { state: 'failed'; message: string }
-type Entry = PendingEntry | FailedEntry
+const runningLaunchesByPane = new Map<string, RunningLaunch>()
 
-/** Enough for every launch a session plausibly fails without its pane ever mounting. */
-export const MAX_REMEMBERED_AGENT_LAUNCH_PANE_FAILURES = 64
-
-const entriesByKey = new Map<string, Entry>()
-
-function paneOwnerKey(worktreeId: string, paneKey: string): string {
-  return JSON.stringify([worktreeId, paneKey])
+function paneKeyOf(pane: AgentSessionOperationOwnedPane): string {
+  return JSON.stringify([pane.worktreeId, pane.paneKey])
 }
 
-function rememberFailure(key: string, entry: FailedEntry): void {
-  entriesByKey.delete(key)
-  entriesByKey.set(key, entry)
-  const failed = [...entriesByKey].filter(([, candidate]) => candidate.state === 'failed')
-  for (const [oldKey] of failed.slice(0, -MAX_REMEMBERED_AGENT_LAUNCH_PANE_FAILURES)) {
-    entriesByKey.delete(oldKey)
-  }
+export type RunningAgentLaunchPane = {
+  /** The launch is over; its record says how. `tabTakenBack`: the host is closing the tab. */
+  finish(outcome: { tabTakenBack: boolean }): void
 }
 
-export type AgentLaunchOwnedPane = {
-  /** The host's PTY is bound to the pane; a waiting pane attaches to it. */
-  launched(): void
-  /** The launch failed; the pane shows `reason`, now or whenever it mounts. */
-  failed(reason: string): void
-  /** The launch did not run into this pane (a replay, a refusal, another surface). */
-  withdraw(): void
-}
-
-/** Claims the pane before the window can mount it. Only the first settlement counts. */
-export function claimAgentLaunchPane(worktreeId: string, paneKey: string): AgentLaunchOwnedPane {
-  const key = paneOwnerKey(worktreeId, paneKey)
-  const previous = entriesByKey.get(key)
-  let resolve!: (settlement: Settlement) => void
-  const entry: PendingEntry = {
-    state: 'pending',
-    settled: new Promise<Settlement>((done) => {
+/** Registered before the window hears of the tab, so a pane that mounts at once already waits. */
+export function trackRunningAgentLaunchPane(
+  pane: AgentSessionOperationOwnedPane
+): RunningAgentLaunchPane {
+  const key = paneKeyOf(pane)
+  let resolve!: (outcome: { tabTakenBack: boolean }) => void
+  const running: RunningLaunch = {
+    finished: new Promise((done) => {
       resolve = done
     })
   }
-  entriesByKey.set(key, entry)
-  let done = false
-  const settle = (settlement: Settlement, next: Entry | undefined): void => {
-    if (done) {
-      return
-    }
-    done = true
-    if (entriesByKey.get(key) === entry) {
-      if (next?.state === 'failed') {
-        rememberFailure(key, next)
-      } else if (next) {
-        entriesByKey.set(key, next)
-      } else {
-        entriesByKey.delete(key)
-      }
-    }
-    resolve(settlement)
-  }
+  runningLaunchesByPane.set(key, running)
+  let finished = false
   return {
-    launched: () => settle({ kind: 'launched' }, undefined),
-    failed: (reason) => {
-      const message = formatAgentLaunchPaneFailure(reason)
-      settle({ kind: 'failed', message }, { state: 'failed', message })
-    },
-    // An earlier attempt's failure on this pane still stands; this attempt never touched it.
-    withdraw: () =>
-      previous?.state === 'failed'
-        ? settle({ kind: 'failed', message: previous.message }, previous)
-        : settle({ kind: 'withdrawn' }, previous)
+    finish: (outcome) => {
+      if (finished) {
+        return
+      }
+      finished = true
+      if (runningLaunchesByPane.get(key) === running) {
+        runningLaunchesByPane.delete(key)
+      }
+      resolve(outcome)
+    }
   }
+}
+
+function launchRanInPane(row: AgentSessionOperationRow, paneKey: string): boolean {
+  if (row.outcome.status !== 'succeeded' || !isAgentLaunchResult(row.outcome.launch)) {
+    return false
+  }
+  const { outcome } = row.outcome.launch
+  return outcome.kind === 'terminal' && outcome.paneKey === paneKey
+}
+
+/** The pane's fate as the record tells it. Exported for the record-only cases a test pins. */
+export function agentLaunchPaneVerdictFromRecord(
+  owning: readonly AgentSessionOperationRow[],
+  paneKey: string
+): AgentLaunchPaneVerdict {
+  if (owning.length === 0 || owning.some((row) => launchRanInPane(row, paneKey))) {
+    // Nothing owns it, or an agent ran here and is gone: the pane is an ordinary terminal again.
+    return { kind: 'proceed' }
+  }
+  const latest = owning.reduce((a, b) => (b.recordedAt > a.recordedAt ? b : a))
+  switch (latest.outcome.status) {
+    case 'failed':
+      return { kind: 'not-started', code: latest.outcome.code }
+    case 'succeeded':
+      // A chat, or another pane: nothing ran here.
+      return { kind: 'withdrawn' }
+    case 'unknown':
+    case 'pending':
+      return { kind: 'unconfirmed' }
+  }
+}
+
+export type AgentLaunchPaneEvidence = {
+  /** A process holds the pane: the spawn attaches to it, whatever the record says. */
+  isPaneLive(paneKey: string): boolean
+  /** The record's rows when the store is already open; null when it is not. */
+  openedRows(): Iterable<AgentSessionOperationRow> | null
+  /** The pane's tab says a launch laid it out, so it is worth opening the record for. */
+  paneWasLaidOutByLaunch(): boolean
+  openRows(): Promise<Iterable<AgentSessionOperationRow>>
+  now(): number
+}
+
+async function settleVerdict(
+  pane: AgentSessionOperationOwnedPane,
+  evidence: AgentLaunchPaneEvidence
+): Promise<AgentLaunchPaneVerdict> {
+  for (;;) {
+    const running = runningLaunchesByPane.get(paneKeyOf(pane))
+    if (!running) {
+      break
+    }
+    if ((await running.finished).tabTakenBack) {
+      return { kind: 'withdrawn' }
+    }
+  }
+  if (evidence.isPaneLive(pane.paneKey)) {
+    return { kind: 'proceed' }
+  }
+  // Bookkeeping never gates the user: a record that cannot be read leaves an ordinary terminal.
+  const rows = evidence.openedRows() ?? (await evidence.openRows().catch(() => null))
+  return rows
+    ? agentLaunchPaneVerdictFromRecord(
+        listAgentSessionOperationRowsOwningPane(rows, pane, evidence.now()),
+        pane.paneKey
+      )
+    : { kind: 'proceed' }
 }
 
 /**
- * Called by a pane's own spawn before it reserves anything. Null when no launch owns the pane, so
- * every other spawn keeps its timing; otherwise resolves once the pane may proceed (the host's
- * process is bound) and rejects with the launch's failure instead of letting the spawn start a shell.
+ * Null when nothing can own the pane — no launch running for it, the record open with no row naming
+ * it, or the record closed and the tab not laid out by a launch — so every other spawn keeps its
+ * timing. Otherwise the verdict, once any running launch is over.
  */
-export function awaitAgentLaunchPaneAttachment(
-  worktreeId: string | undefined,
-  paneKey: string | null
-): Promise<void> | null {
-  const entry = worktreeId && paneKey ? entriesByKey.get(paneOwnerKey(worktreeId, paneKey)) : null
-  if (!entry) {
-    return null
-  }
-  if (entry.state === 'failed') {
-    return Promise.reject(new Error(entry.message))
-  }
-  return entry.settled.then((settlement) => {
-    if (settlement.kind === 'failed') {
-      throw new Error(settlement.message)
+export function resolveAgentLaunchPaneVerdict(
+  pane: AgentSessionOperationOwnedPane,
+  evidence: AgentLaunchPaneEvidence
+): Promise<AgentLaunchPaneVerdict> | null {
+  if (!runningLaunchesByPane.has(paneKeyOf(pane))) {
+    const rows = evidence.openedRows()
+    const mayBeOwned = rows
+      ? listAgentSessionOperationRowsOwningPane(rows, pane, evidence.now()).length > 0
+      : evidence.paneWasLaidOutByLaunch()
+    if (!mayBeOwned) {
+      return null
     }
-  })
+  }
+  return settleVerdict(pane, evidence)
 }
 
 export function resetAgentLaunchPanesForTests(): void {
-  entriesByKey.clear()
+  runningLaunchesByPane.clear()
 }

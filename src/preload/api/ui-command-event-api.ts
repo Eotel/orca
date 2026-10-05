@@ -170,6 +170,7 @@ export type UiCommandEventApi = {
       focus?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
+      launchTabShown?: true
       tabId?: string
       leafId?: string
       splitFromLeafId?: string

@@ -6,9 +6,12 @@
  * wait for all of them. It now waits for none: the host asks the window for the tab first, under ids
  * the spawn will bake into the agent's PTY, and the pane attaches to that process when it exists.
  *
+ * Only a launch with an operation id gets one: the launch record is what tells the pane, then and
+ * after a restart, which launch owns it and how it ended (`agent-launch-pane-attachment`).
+ *
  * Best-effort by construction. Anything this cannot decide cheaply — a workspace it cannot resolve,
- * a chat-mode default, no window owning the layout — skips the early tab, and the launch's tab
- * appears when it spawns, exactly as before. Placement and presentation never fail a launch.
+ * a chat-mode default, no window owning the layout, a pane already running something — skips the
+ * early tab, and the launch's tab appears when it spawns, exactly as before.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -17,13 +20,18 @@ import type {
   AgentLaunchResult
 } from '../../../../shared/agent-launch-intent'
 import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
-import type { AgentLaunchTabViewerRule } from '../../../../shared/agent-launch-tab-publication'
+import type {
+  AgentLaunchTabPublished,
+  AgentLaunchTabViewerRule
+} from '../../../../shared/agent-launch-tab-publication'
+import type { AgentSessionOperationOwnedPane } from '../../../../shared/agent-session-operation-ledger'
+import {
+  navigationTargetsHost,
+  resolveRuntimeNavigationTarget
+} from '../../../../shared/runtime-navigation'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
-import {
-  claimAgentLaunchPane,
-  type AgentLaunchOwnedPane
-} from '../../../agent-launch/agent-launch-pane-attachment'
+import { trackRunningAgentLaunchPane } from '../../../agent-launch/agent-launch-pane-attachment'
 import {
   decideAgentLaunchMode,
   readAgentLaunchModeSettings
@@ -33,26 +41,25 @@ import type { RpcContext } from '../core'
 import type { AgentLaunchParams } from './agent-launch-schemas'
 
 /**
- * Whose screen moves, from who called: the split browser tabs already use between the host's view
- * and a caller's own. A paired device moves only its own selection, never the host window.
+ * Whose screen moves. `presentation` is `terminal.create`'s field with its meaning (focused: the
+ * host selects the tab; background: nothing moves); the audience is main's navigation default for
+ * the caller, so a paired device moves only its own selection. The desktop's own view is the host
+ * window, which follows only while it still shows that workspace.
  */
 export function agentLaunchTabViewerRule(
-  caller: RpcContext['caller'],
+  context: Pick<RpcContext, 'caller' | 'clientKind'>,
   presentation: AgentLaunchParams['presentation']
 ): AgentLaunchTabViewerRule {
   if (presentation === 'background') {
     return 'none'
   }
-  switch (caller?.kind) {
-    case 'paired-device':
-      return 'none'
-    case 'desktop':
-      return 'focus-in-workspace'
-    case 'local-cli':
-      return presentation === 'focused' ? 'focus-window' : 'reveal-owner'
-    case undefined:
-      return 'reveal-owner'
+  if (context.caller?.kind === 'desktop') {
+    return 'focus-in-workspace'
   }
+  if (!navigationTargetsHost(resolveRuntimeNavigationTarget({ clientKind: context.clientKind }))) {
+    return 'none'
+  }
+  return presentation === 'focused' ? 'focus-window' : 'reveal-owner'
 }
 
 /**
@@ -69,11 +76,16 @@ function readsEarlyLaunchTab(context: Pick<RpcContext, 'caller' | 'clientCapabil
 export type EarlyAgentLaunchTab = {
   /** The pane the launch must create: the caller's, or one minted here. */
   paneKey: string
-  /** The surface exists; a terminal on this pane lets the waiting pane attach. */
+  /** What the launch record names as this launch's pane. */
+  ownedPane: AgentSessionOperationOwnedPane
+  /** Admission let this request run, so the record now names the pane and tells it how it ended. */
+  executing(): void
+  /** The surface exists. */
   surfacePublished(result: AgentLaunchResult): void
-  /** The launch threw; the pane shows why instead of starting a shell. */
-  failed(error: unknown): void
-  /** The launch is over, however it ended; a tab nothing launched into is taken back. */
+  /** The window has said it shows the tab, so the spawn must bind it without a second reveal. */
+  windowShowsTab(): boolean
+  /** The launch is over, however it ended. A tab this request made goes when nothing will ever run
+   *  in it: never admitted, or its surface landed elsewhere. A failed launch's tab stays to say why. */
   finish(): void
   /** Where the window placed the tab, once it has said. */
   placement(): AgentLaunchPlacementReceipt | undefined
@@ -110,7 +122,10 @@ export async function publishAgentLaunchTabEarly(
     params.target.kind !== 'existing' ||
     params.reuseTerminal ||
     !readsEarlyLaunchTab(context) ||
-    !runtime.canPublishAgentLaunchTab()
+    !runtime.canPublishAgentLaunchTab() ||
+    // A running pane is attached to, never launched into; this launch is refused and must not
+    // touch the pane another launch's agent is running in.
+    (params.paneKey !== undefined && runtime.hasLiveTerminalForPaneKey(params.paneKey))
   ) {
     return null
   }
@@ -140,8 +155,9 @@ export async function publishAgentLaunchTabEarly(
   if (!pane) {
     return null
   }
-  // Claimed before the window hears of the tab, so a pane that mounts at once already waits.
-  const owned = claimAgentLaunchPane(workspace.id, paneKey)
+  const ownedPane = { worktreeId: workspace.id, paneKey }
+  // Before the window hears of the tab, so a pane that mounts at once already waits.
+  const running = trackRunningAgentLaunchPane(ownedPane)
   let publishing: ReturnType<typeof runtime.publishAgentLaunchTab>
   try {
     publishing = runtime.publishAgentLaunchTab({
@@ -156,33 +172,42 @@ export async function publishAgentLaunchTabEarly(
         connectionId: workspace.connectionId
       }),
       ...(params.placement ? { placement: params.placement } : {}),
-      viewer: agentLaunchTabViewerRule(context.caller, params.presentation)
+      viewer: agentLaunchTabViewerRule(context, params.presentation),
+      ...(params.prompt?.text ? { prompt: params.prompt.text } : {})
     })
   } catch (error) {
-    owned.withdraw()
+    running.finish({ tabTakenBack: false })
     throw error
   }
   if (!publishing) {
-    owned.withdraw()
+    running.finish({ tabTakenBack: false })
     return null
   }
-  return trackEarlyAgentLaunchTab(owned, paneKey, publishing, (tabId) =>
-    runtime.withdrawAgentLaunchTab(tabId)
-  )
+  return trackEarlyAgentLaunchTab({
+    paneKey,
+    ownedPane,
+    publishing,
+    finishRunning: (tabTakenBack) => running.finish({ tabTakenBack }),
+    paneIsLive: () => runtime.hasLiveTerminalForPaneKey(paneKey),
+    closeTab: (tabId) => runtime.withdrawAgentLaunchTab(tabId)
+  })
 }
 
-function trackEarlyAgentLaunchTab(
-  owned: AgentLaunchOwnedPane,
-  paneKey: string,
-  publishing: Promise<{ tabId: string; created: boolean; placement: AgentLaunchPlacementReceipt }>,
+function trackEarlyAgentLaunchTab(args: {
+  paneKey: string
+  ownedPane: AgentSessionOperationOwnedPane
+  publishing: Promise<AgentLaunchTabPublished>
+  finishRunning: (tabTakenBack: boolean) => void
+  paneIsLive: () => boolean
   closeTab: (tabId: string) => void
-): EarlyAgentLaunchTab {
-  let placement: AgentLaunchPlacementReceipt | undefined
-  let ranHere = false
-  const published = publishing.then(
-    (reply) => {
-      placement = reply.placement
-      return reply
+}): EarlyAgentLaunchTab {
+  let reply: AgentLaunchTabPublished | null = null
+  let executing = false
+  let ranHere: boolean | null = null
+  const published = args.publishing.then(
+    (answer) => {
+      reply = answer
+      return answer
     },
     (error: unknown) => {
       // The tab did not appear; the launch still runs and its tab appears when it spawns.
@@ -191,30 +216,31 @@ function trackEarlyAgentLaunchTab(
     }
   )
   return {
-    paneKey,
+    paneKey: args.paneKey,
+    ownedPane: args.ownedPane,
+    executing: () => {
+      executing = true
+    },
     surfacePublished: (result) => {
-      if (result.outcome.kind === 'terminal' && result.outcome.paneKey === paneKey) {
-        ranHere = true
-        owned.launched()
-      }
+      ranHere = result.outcome.kind === 'terminal' && result.outcome.paneKey === args.paneKey
     },
-    failed: (error) => {
-      // A failed launch keeps its tab so its pane can say why.
-      ranHere = true
-      owned.failed(error instanceof Error ? error.message : String(error))
-    },
+    windowShowsTab: () => reply !== null,
     finish: () => {
-      owned.withdraw()
-      if (ranHere) {
+      const nothingWillRunHere = !executing || ranHere === false
+      if (!nothingWillRunHere) {
+        args.finishRunning(false)
         return
       }
-      // Only a tab this request created goes; a retry's tab belongs to the attempt that made it.
-      void published.then((reply) => {
-        if (reply?.created) {
-          closeTab(reply.tabId)
+      // Only a tab this request made goes, and never one a running agent holds (a replay can
+      // remake a tab whose agent survived).
+      void published.then((answer) => {
+        const takeBack = answer?.created === true && !args.paneIsLive()
+        args.finishRunning(takeBack)
+        if (takeBack && answer) {
+          args.closeTab(answer.tabId)
         }
       })
     },
-    placement: () => placement
+    placement: () => reply?.placement
   }
 }

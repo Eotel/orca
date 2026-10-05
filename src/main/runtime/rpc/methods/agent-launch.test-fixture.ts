@@ -160,7 +160,10 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       (request: Omit<AgentLaunchTabPublishRequest, 'requestId'>) =>
         options.publishAgentLaunchTab?.(request) ?? null
     ),
-    withdrawAgentLaunchTab: vi.fn((_tabId: string) => {})
+    withdrawAgentLaunchTab: vi.fn((_tabId: string) => {}),
+    // A pane this runtime created or adopted is running its process.
+    hasLiveTerminalForPaneKey: vi.fn((paneKey: string) => handlesByPaneKey.has(paneKey)),
+    openedAgentSessionRecordStore: vi.fn(() => launchRecordStore)
   }
 }
 

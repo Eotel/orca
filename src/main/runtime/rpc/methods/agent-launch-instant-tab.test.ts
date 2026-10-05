@@ -20,9 +20,11 @@ import type {
 } from '../../../../shared/agent-launch-tab-publication'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
-  awaitAgentLaunchPaneAttachment,
-  resetAgentLaunchPanesForTests
+  resetAgentLaunchPanesForTests,
+  resolveAgentLaunchPaneVerdict,
+  type AgentLaunchPaneEvidence
 } from '../../../agent-launch/agent-launch-pane-attachment'
+import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch-pane-verdict'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'
@@ -155,6 +157,49 @@ function terminalOptions(runtime: Host): Record<string, unknown> {
   return runtime.createTerminal.mock.calls[0]?.[1] ?? {}
 }
 
+/** What the pane reads when it mounts: this host's runtime, and the launch record on disk. */
+function paneEvidence(
+  runtime: Host,
+  record: AgentSessionRecordStore = store
+): AgentLaunchPaneEvidence {
+  return {
+    isPaneLive: (paneKey) => runtime.hasLiveTerminalForPaneKey(paneKey),
+    openedRows: () => record.listOperationRows(),
+    paneWasLaidOutByLaunch: () => true,
+    openRows: async () => record.listOperationRows(),
+    now: () => Date.now()
+  }
+}
+
+async function paneVerdict(
+  runtime: Host,
+  record?: AgentSessionRecordStore,
+  paneKey = PANE_KEY
+): Promise<AgentLaunchPaneVerdict | 'unowned'> {
+  return (
+    (await resolveAgentLaunchPaneVerdict(
+      { worktreeId: 'wt-7', paneKey },
+      paneEvidence(runtime, record)
+    )) ?? 'unowned'
+  )
+}
+
+/** A spawn that fails before the daemon was asked for a process: nothing can be running. */
+function failBeforeDispatch(runtime: Host, message: string): void {
+  runtime.createTerminal.mockRejectedValueOnce(new Error(message))
+}
+
+/** A spawn the daemon was asked for, whose answer was lost: the process may exist. */
+function failAfterDispatch(runtime: Host, message: string): void {
+  runtime.createTerminal.mockImplementationOnce(async (_selector, createOptions) => {
+    const dispatched = createOptions?.onPtySpawnDispatched
+    if (typeof dispatched === 'function') {
+      dispatched()
+    }
+    throw new Error(message)
+  })
+}
+
 describe('the instant tab', () => {
   it('is asked for before the launch is admitted, and the spawn lands in its pane', async () => {
     const runtime = hostWithWindow({ terminalPaneKey: PANE_KEY })
@@ -173,7 +218,7 @@ describe('the instant tab', () => {
   it('names a pane the host minted when the caller sent none, and spawns into that pane', async () => {
     const runtime = hostWithWindow()
 
-    await plainLaunch(runtime, {}, CLI)
+    await replayLaunch(runtime, {}, CLI)
 
     const request = runtime.published[0]!
     expect(terminalOptions(runtime)).toMatchObject({
@@ -186,46 +231,39 @@ describe('the instant tab', () => {
   it('binds the spawn to the shown tab without moving anyone a second time', async () => {
     const runtime = hostWithWindow()
 
-    await plainLaunch(runtime, { presentation: 'focused' }, CLI)
+    await replayLaunch(runtime, { presentation: 'focused' }, CLI)
 
-    expect(terminalOptions(runtime)).toMatchObject({ surfaceOwner: false })
+    expect(terminalOptions(runtime)).toMatchObject({ surfaceOwner: false, launchTabShown: true })
   })
 
-  it('lets the waiting pane attach once the agent is running', async () => {
-    const runtime = hostWithWindow({ terminalPaneKey: PANE_KEY })
-
-    await plainLaunch(runtime, { paneKey: PANE_KEY }, CLI)
-
-    // Nothing left to wait on: the pane's spawn goes straight to the agent's process.
-    expect(awaitAgentLaunchPaneAttachment('wt-7', PANE_KEY)).toBeNull()
-    expect(runtime.withdrawAgentLaunchTab).not.toHaveBeenCalled()
-  })
-
-  it('shows a failed spawn in the pane, keeps the tab, and never offers the pane a shell', async () => {
-    const runtime = hostWithWindow()
-    runtime.createTerminal.mockRejectedValueOnce(new Error('spawn claude ENOENT'))
-
-    await expect(plainLaunch(runtime, { paneKey: PANE_KEY }, CLI)).rejects.toThrow('ENOENT')
-
-    await expect(awaitAgentLaunchPaneAttachment('wt-7', PANE_KEY)!).rejects.toThrow(
-      'spawn claude ENOENT'
-    )
-    expect(runtime.withdrawAgentLaunchTab).not.toHaveBeenCalled()
-  })
-
-  it('still launches when the window could not show the tab early', async () => {
+  it('reveals the spawn as before when the window never said it showed the tab', async () => {
     const runtime = hostWithWindow({ reply: new Error('renderer_unavailable') })
 
-    const result = await plainLaunch(runtime, {}, CLI)
+    const result = await replayLaunch(runtime, {}, CLI)
 
     expect(result.outcome.kind).toBe('terminal')
     expect(result.placement).toBeUndefined()
+    expect(terminalOptions(runtime)).not.toHaveProperty('surfaceOwner')
+    expect(terminalOptions(runtime)).not.toHaveProperty('launchTabShown')
+  })
+
+  it('records the pane it showed with the launch, and lets the pane attach once the agent runs', async () => {
+    const runtime = hostWithWindow({ terminalPaneKey: PANE_KEY })
+
+    await replayLaunch(runtime, { paneKey: PANE_KEY }, CLI)
+
+    expect(store.listOperationRows()[0]?.ownedPane).toEqual({
+      worktreeId: 'wt-7',
+      paneKey: PANE_KEY
+    })
+    await expect(paneVerdict(runtime)).resolves.toEqual({ kind: 'proceed' })
+    expect(runtime.withdrawAgentLaunchTab).not.toHaveBeenCalled()
   })
 
   it('is not shown early for a chat-mode launch, whose tab is the session', async () => {
     const runtime = hostWithWindow({ settings: STRUCTURED_PREFERENCE })
 
-    await plainLaunch(runtime, {}, CLI)
+    await replayLaunch(runtime, {}, CLI)
 
     expect(runtime.published).toEqual([])
   })
@@ -237,27 +275,136 @@ describe('the instant tab', () => {
 
     expect(runtime.published).toEqual([])
   })
+
+  it('is not shown early without an operation id: no record could tell its pane how it ended', async () => {
+    const runtime = hostWithWindow()
+
+    await plainLaunch(runtime, {}, CLI)
+
+    expect(runtime.published).toEqual([])
+  })
+})
+
+describe('the pane after its launch', () => {
+  it('says a failed spawn did not start, keeps the tab, and says it again after a restart', async () => {
+    const runtime = hostWithWindow()
+    failBeforeDispatch(runtime, 'spawn claude ENOENT')
+
+    await expect(replayLaunch(runtime, { paneKey: PANE_KEY }, CLI)).rejects.toThrow('ENOENT')
+
+    await expect(paneVerdict(runtime)).resolves.toEqual({
+      kind: 'not-started',
+      code: 'spawn claude ENOENT'
+    })
+    expect(runtime.withdrawAgentLaunchTab).not.toHaveBeenCalled()
+    // A restarted host: no launch in memory, the record read back from disk.
+    resetAgentLaunchPanesForTests()
+    const reopened = await openTestAgentSessionRecordStore(directory)
+    await expect(paneVerdict(hostWithWindow(), reopened)).resolves.toMatchObject({
+      kind: 'not-started'
+    })
+  })
+
+  it('says it cannot confirm a spawn whose outcome is unknown, and attaches if the agent turns up', async () => {
+    const runtime = hostWithWindow()
+    failAfterDispatch(runtime, 'daemon create timed out')
+
+    await expect(replayLaunch(runtime, { paneKey: PANE_KEY }, CLI)).rejects.toThrow(
+      'agent_session_operation_unknown'
+    )
+
+    await expect(paneVerdict(runtime)).resolves.toEqual({ kind: 'unconfirmed' })
+    runtime.hasLiveTerminalForPaneKey.mockReturnValue(true)
+    await expect(paneVerdict(runtime)).resolves.toEqual({ kind: 'proceed' })
+  })
+
+  it("never touches a running agent's pane when a second launch names it", async () => {
+    const first = hostWithWindow({ terminalPaneKey: PANE_KEY })
+    await replayLaunch(first, { paneKey: PANE_KEY }, CLI)
+
+    const second = hostWithWindow({
+      adoptedPanes: { [PANE_KEY]: 'term_1' },
+      terminalPaneAlreadyLive: true
+    })
+    await expect(replayLaunch(second, { paneKey: PANE_KEY }, CLI)).rejects.toThrow(
+      'agent_launch_pane_already_live'
+    )
+
+    expect(second.published).toEqual([])
+    expect(second.withdrawAgentLaunchTab).not.toHaveBeenCalled()
+    // Its agent exits and the pane remounts: still the first launch's pane, never "couldn't start".
+    second.hasLiveTerminalForPaneKey.mockReturnValue(false)
+    await expect(paneVerdict(second)).resolves.toEqual({ kind: 'proceed' })
+  })
+
+  it('takes back a tab nothing ran into without letting its waiting pane start a shell', async () => {
+    const operationId = nextOperationId()
+    await replayLaunch(hostWithWindow({ terminalPaneKey: PANE_KEY }), { operationId }, CLI)
+
+    const verdicts: Promise<AgentLaunchPaneVerdict | 'unowned'>[] = []
+    const refused = hostWithWindow()
+    const publish = refused.publishAgentLaunchTab.getMockImplementation()!
+    refused.publishAgentLaunchTab.mockImplementation((request) => {
+      const published = publish(request)
+      // The pane mounts as soon as the tab exists.
+      verdicts.push(paneVerdict(refused, store, `${request.tabId}:${request.leafId}`))
+      return published
+    })
+    // The same id with other params: a conflict, so admission refuses and nothing runs.
+    await expect(
+      replayLaunch(refused, { operationId, prompt: { text: 'other', delivery: 'submit' } }, CLI)
+    ).rejects.toThrow('agent_session_operation_conflict')
+
+    await expect(verdicts[0]).resolves.toEqual({ kind: 'withdrawn' })
+    await vi.waitFor(() => expect(refused.withdrawAgentLaunchTab).toHaveBeenCalledOnce())
+  })
 })
 
 describe('retries', () => {
-  it('a replay never makes a second tab: it reuses the first, and takes back one it had to make', async () => {
+  it('a replay never makes a second tab, and never closes one an agent still runs in', async () => {
     const operationId = nextOperationId()
     const first = hostWithWindow({ terminalPaneKey: PANE_KEY })
     await replayLaunch(first, { paneKey: PANE_KEY, operationId }, CLI)
 
-    // The tab is still there: the window finds it by id, and nothing is taken back.
-    const replayedIntoLiveTab = hostWithWindow({ reply: { created: false } })
-    await replayLaunch(replayedIntoLiveTab, { paneKey: PANE_KEY, operationId }, CLI)
-    expect(replayedIntoLiveTab.createTerminal).not.toHaveBeenCalled()
-    expect(replayedIntoLiveTab.withdrawAgentLaunchTab).not.toHaveBeenCalled()
+    // The agent is running: nothing is published, nothing taken back.
+    const replayedIntoLiveAgent = hostWithWindow({ adoptedPanes: { [PANE_KEY]: 'term_1' } })
+    await replayLaunch(replayedIntoLiveAgent, { paneKey: PANE_KEY, operationId }, CLI)
+    expect(replayedIntoLiveAgent.published).toEqual([])
+    expect(replayedIntoLiveAgent.withdrawAgentLaunchTab).not.toHaveBeenCalled()
 
-    // The user closed it meanwhile: the replay's own tab is taken back, not left empty.
+    // The window still has the tab: it finds it by id, and nothing is taken back.
+    const replayedIntoShownTab = hostWithWindow({ reply: { created: false } })
+    await replayLaunch(replayedIntoShownTab, { paneKey: PANE_KEY, operationId }, CLI)
+    expect(replayedIntoShownTab.createTerminal).not.toHaveBeenCalled()
+    expect(replayedIntoShownTab.withdrawAgentLaunchTab).not.toHaveBeenCalled()
+
+    // The tab is gone and so is its agent: the replay's own empty tab is taken back.
     const replayedAfterClose = hostWithWindow()
     await replayLaunch(replayedAfterClose, { paneKey: PANE_KEY, operationId }, CLI)
     await vi.waitFor(() =>
       expect(replayedAfterClose.withdrawAgentLaunchTab).toHaveBeenCalledWith(TAB_ID)
     )
     expect(replayedAfterClose.createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('a replay that remade the tab of an agent that survived leaves it', async () => {
+    const operationId = nextOperationId()
+    await replayLaunch(
+      hostWithWindow({ terminalPaneKey: PANE_KEY }),
+      { paneKey: PANE_KEY, operationId },
+      CLI
+    )
+
+    const replayed = hostWithWindow()
+    // The agent's pane comes back while the replay runs (the daemon kept it across a crash).
+    replayed.publishAgentLaunchTab.mockImplementationOnce(async (request) => {
+      replayed.hasLiveTerminalForPaneKey.mockReturnValue(true)
+      return { tabId: request.tabId, created: true, placement: { groupId: 'group-1' } }
+    })
+    await replayLaunch(replayed, { paneKey: PANE_KEY, operationId }, CLI)
+
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(replayed.withdrawAgentLaunchTab).not.toHaveBeenCalled()
   })
 })
 
@@ -267,7 +414,7 @@ describe('placement', () => {
       reply: { placement: { groupId: 'group-anchor', fallback: 'anchor-group' } }
     })
 
-    const result = await plainLaunch(
+    const result = await replayLaunch(
       runtime,
       { placement: { groupId: 'group-closed', afterTabId: 'tab-anchor' } },
       CLI
@@ -301,8 +448,8 @@ describe('placement', () => {
 
 describe('whose view moves', () => {
   it.each([
-    ['the CLI asking for focus moves the window', CLI, 'focused', 'focus-window'],
-    ['the CLI by default reveals the workspace as before', CLI, undefined, 'reveal-owner'],
+    ['a local caller asking for focus moves the window', CLI, 'focused', 'focus-window'],
+    ['a local caller by default reveals the workspace as before', CLI, undefined, 'reveal-owner'],
     [
       'the desktop stays in its workspace if you moved on',
       DESKTOP,
@@ -336,7 +483,7 @@ describe('the view the tab opens in', () => {
   it('is derived on the host, the same for the shown tab and the spawn', async () => {
     const runtime = hostWithWindow({ settings: CHAT_VIEW })
 
-    await plainLaunch(runtime, {}, CLI)
+    await replayLaunch(runtime, {}, CLI)
 
     expect(runtime.published[0]?.viewMode).toBe('chat')
     expect(terminalOptions(runtime)).toMatchObject({ viewMode: 'chat' })
@@ -345,16 +492,22 @@ describe('the view the tab opens in', () => {
   it('stays the terminal for a draft the chat view cannot mirror', async () => {
     const runtime = hostWithWindow({ settings: CHAT_VIEW })
 
-    await plainLaunch(runtime, { prompt: { text: '   ', delivery: 'draft' } }, CLI)
+    await replayLaunch(runtime, { prompt: { text: '   ', delivery: 'draft' } }, CLI)
 
     expect(runtime.published[0]?.viewMode).toBe('terminal')
     expect(terminalOptions(runtime)).toMatchObject({ viewMode: 'terminal' })
   })
 })
 
+it('hands the window the prompt, so a pane whose agent did not start can offer to copy it', async () => {
+  const runtime = hostWithWindow()
+  await replayLaunch(runtime, { prompt: { text: 'fix the build', delivery: 'submit' } }, CLI)
+  expect(runtime.published[0]?.prompt).toBe('fix the build')
+})
+
 it('parses the minted pane key the window was given', async () => {
   const runtime = hostWithWindow()
-  await plainLaunch(runtime, {}, CLI)
+  await replayLaunch(runtime, {}, CLI)
   const request = runtime.published[0]!
   expect(parsePaneKey(`${request.tabId}:${request.leafId}`)).not.toBeNull()
 })

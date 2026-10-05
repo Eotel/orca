@@ -37,6 +37,7 @@ export const uiTerminalAndSessionTabsApi = {
       focus?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
+      launchTabShown?: true
       tabId?: string
       leafId?: string
       splitFromLeafId?: string
@@ -63,6 +64,7 @@ export const uiTerminalAndSessionTabsApi = {
         focus?: boolean
         presentation?: RuntimeTerminalPresentation
         surfaceOwner?: false
+        launchTabShown?: true
         tabId?: string
         leafId?: string
         splitFromLeafId?: string

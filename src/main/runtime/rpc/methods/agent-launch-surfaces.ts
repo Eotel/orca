@@ -45,8 +45,9 @@ export function agentLaunchSurfaceFactory(
   // True when the launch shows its surface to the paired caller itself rather than to everyone.
   callerPresentsSurface = false,
   terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch(),
-  // The window already showed this launch's tab and moved whoever should move; the spawn binds it.
-  tabAlreadyPublished = false
+  // Whether the window has shown this launch's tab and moved whoever should move; asked at spawn,
+  // since its answer can land after admission.
+  windowShowsLaunchTab: () => boolean = () => false
 ): AgentLaunchSurfaceFactory {
   return {
     createStructuredSession: async ({
@@ -147,7 +148,9 @@ export function agentLaunchSurfaceFactory(
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),
         ...(viewMode ? { viewMode } : {}),
-        ...(tabAlreadyPublished ? { surfaceOwner: false as const } : {}),
+        ...(windowShowsLaunchTab()
+          ? { surfaceOwner: false as const, launchTabShown: true as const }
+          : {}),
         onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
       })
       const terminal = await created.catch(terminalSpawn.rethrow)

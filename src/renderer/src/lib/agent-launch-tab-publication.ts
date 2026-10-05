@@ -19,6 +19,7 @@ import {
 import { useAppStore } from '../store'
 import { resolveUnifiedTabCreatePlacement } from '../store/slices/tabs/tabs-create-placement'
 import { insertUnifiedTabAfterAnchor } from './unified-tab-anchor-insertion'
+import { rememberAgentLaunchPanePrompt } from './agent-launch-pane-prompt'
 
 function landedGroupId(worktreeId: string, tabId: string): string | undefined {
   return useAppStore
@@ -55,6 +56,9 @@ export function publishAgentLaunchTab(
     if (!groupId) {
       throw new Error('agent_launch_tab_unplaced')
     }
+    if (request.prompt) {
+      rememberAgentLaunchPanePrompt(tabId, request.prompt)
+    }
     return { tabId, created: false, placement: { groupId } }
   }
 
@@ -77,10 +81,14 @@ export function publishAgentLaunchTab(
   const tab = store.createTab(worktreeId, placement.groupId, undefined, {
     id: tabId,
     initialLeafId: leafId,
+    agentLaunchLeafId: leafId,
     launchAgent: request.launchAgent,
     viewMode: request.viewMode,
     ...(focuses ? {} : { activate: false, recordInteraction: false })
   })
+  if (request.prompt) {
+    rememberAgentLaunchPanePrompt(tabId, request.prompt)
+  }
   if (tab.id !== tabId) {
     // createTab mints a fresh id on a collision it saw and we did not; that tab would never attach.
     useAppStore.getState().closeTab(tab.id, { recordInteraction: false })

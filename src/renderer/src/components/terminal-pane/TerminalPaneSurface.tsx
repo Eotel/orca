@@ -7,6 +7,8 @@ import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
+import { AgentLaunchPaneNotice } from './AgentLaunchPaneNotice'
+import { parseAgentLaunchPaneRefusal } from '../../../../shared/agent-launch-pane-verdict'
 import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
@@ -112,6 +114,11 @@ export function TerminalPaneSurface({
     visibleTerminalError,
     worktreeId
   } = controller
+  const launchRefusal = visibleTerminalError
+    ? parseAgentLaunchPaneRefusal(visibleTerminalError)
+    : null
+  // A withdrawn launch closes its tab instead; this pane only ever shows the other two.
+  const visibleLaunchRefusal = launchRefusal?.kind === 'withdrawn' ? null : launchRefusal
 
   return (
     <>
@@ -163,39 +170,45 @@ export function TerminalPaneSurface({
       <TerminalPaneCodexRestartPortals controller={controller} />
       {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
           toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
-      {visibleTerminalError && isActive && !showSshReconnectOverlay && activePane
+      {visibleLaunchRefusal && isActive && activePane
         ? createPortal(
-            <TerminalErrorToast
-              error={visibleTerminalError}
-              onDismiss={dismissTerminalError}
-              onRestartDaemon={() => daemonActions.setPending('restart')}
-              onRetry={
-                isPaneOwnerUnverifiedError(visibleTerminalError)
-                  ? () => {
-                      const ptyId = activePane
-                        ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
-                        : null
-                      return requestTerminalPaneRecovery({
-                        tabId,
-                        ptyId,
-                        reason: 'reattach-unverifiable',
-                        // The user asking again is the new trigger that reopens
-                        // a reason an observed failure has closed.
-                        trigger: 'user'
-                      }).then((recovered) => {
-                        if (recovered) {
-                          dismissTerminalError()
-                        }
-                        return recovered
-                      })
-                    }
-                  : undefined
-              }
-            />,
+            <AgentLaunchPaneNotice refusal={visibleLaunchRefusal} tabId={tabId} />,
             activePane.container,
-            `terminal-error-${activePane.id}`
+            `agent-launch-pane-notice-${activePane.id}`
           )
-        : null}
+        : visibleTerminalError && isActive && !showSshReconnectOverlay && activePane
+          ? createPortal(
+              <TerminalErrorToast
+                error={visibleTerminalError}
+                onDismiss={dismissTerminalError}
+                onRestartDaemon={() => daemonActions.setPending('restart')}
+                onRetry={
+                  isPaneOwnerUnverifiedError(visibleTerminalError)
+                    ? () => {
+                        const ptyId = activePane
+                          ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
+                          : null
+                        return requestTerminalPaneRecovery({
+                          tabId,
+                          ptyId,
+                          reason: 'reattach-unverifiable',
+                          // The user asking again is the new trigger that reopens
+                          // a reason an observed failure has closed.
+                          trigger: 'user'
+                        }).then((recovered) => {
+                          if (recovered) {
+                            dismissTerminalError()
+                          }
+                          return recovered
+                        })
+                      }
+                    : undefined
+                }
+              />,
+              activePane.container,
+              `terminal-error-${activePane.id}`
+            )
+          : null}
       <TerminalPaneProcessExitPortals controller={controller} />
       <TerminalPaneSshReconnectPortals controller={controller} />
       <DaemonActionDialog api={daemonActions} />

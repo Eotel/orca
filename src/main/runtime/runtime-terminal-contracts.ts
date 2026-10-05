@@ -75,6 +75,8 @@ export type TerminalCreateOptions = {
   activate?: boolean
   presentation?: RuntimeTerminalPresentation
   surfaceOwner?: false
+  /** The window showed this launch's tab before its process existed; if it is gone, the user closed it. */
+  launchTabShown?: true
   tabId?: string
   leafId?: string
   /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */

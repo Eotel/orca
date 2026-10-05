@@ -35,6 +35,12 @@ const LaunchAgent = z
 
 /** The launch's fields without the cross-field check, for building an older host's shape in tests;
  *  every receiver parses `AgentLaunch` or `AgentLaunchReplay`. */
+/** A layout id the caller may get wrong without failing the launch: anything but a string is dropped. */
+const tolerantTabLayoutId = z
+  .unknown()
+  .transform((value): string | undefined => (typeof value === 'string' ? value : undefined))
+  .optional()
+
 export const AgentLaunchFields = z.object({
   agent: LaunchAgent,
   /**
@@ -117,14 +123,13 @@ export const AgentLaunchFields = z.object({
    * hosts advertising `agent.launch.placement.v1`; older hosts drop it.
    */
   placement: z
-    .object({
-      groupId: z.string().optional(),
-      afterTabId: z.string().optional()
-    })
-    .optional(),
-  /** Whether the caller's own view moves to the new tab; never another viewer's. Outside the
-   *  fingerprint for the same reason as `placement`, and open like it: a word this host does not
-   *  know reads as absent rather than failing the launch. */
+    .object({ groupId: tolerantTabLayoutId, afterTabId: tolerantTabLayoutId })
+    .optional()
+    .catch(undefined),
+  /** `terminal.create`'s field, with its meaning: `focused` selects the new tab, `background` moves
+   *  nothing; absent reveals it, as before. Whose view that is follows main's navigation default for
+   *  the caller, so a paired device moves only its own selection. Outside the fingerprint for the
+   *  same reason as `placement`, and open like it: a word this host does not know reads as absent. */
   presentation: z
     .string()
     .optional()

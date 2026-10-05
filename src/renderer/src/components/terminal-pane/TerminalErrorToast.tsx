@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { AGENT_LAUNCH_PANE_FAILURE_MARKER } from '../../../../shared/agent-launch-pane-failure'
 import { translate } from '@/i18n/i18n'
 import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
 import { Button } from '@/components/ui/button'
@@ -136,14 +135,6 @@ export function humanizeTerminalError(error: string): string {
       'Reconnecting this terminal — its output is being re-established. The session is still running.'
     )
   )
-  if (humanized.includes(AGENT_LAUNCH_PANE_FAILURE_MARKER)) {
-    humanized = humanized.replaceAll(AGENT_LAUNCH_PANE_FAILURE_MARKER, () =>
-      translate(
-        'auto.components.terminal.pane.TerminalErrorToast.agentLaunchNotStarted',
-        "The agent couldn't start."
-      )
-    )
-  }
   if (humanized.includes(REMOTE_TERMINAL_CLOSED_MARKER)) {
     humanized = humanized.replaceAll(REMOTE_TERMINAL_CLOSED_MARKER, () =>
       translate(

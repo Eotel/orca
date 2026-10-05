@@ -33,6 +33,7 @@ vi.mock('@/hooks/ipc-events/terminal-command-state', async (importOriginal) => (
 createTabsSliceMockApi()
 
 const { publishAgentLaunchTab } = await import('./agent-launch-tab-publication')
+const { agentLaunchPanePrompt } = await import('./agent-launch-pane-prompt')
 
 const WT = 'repo1::/tmp/feature'
 const OTHER_WT = 'repo1::/tmp/other'
@@ -74,12 +75,22 @@ describe('publishing a launch tab before its agent exists', () => {
     expect(published.created).toBe(true)
     expect(published.tabId).toBe(TAB_ID)
     const terminal = store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)
-    expect(terminal).toMatchObject({ ptyId: null, launchAgent: 'claude' })
+    // The tab remembers which pane a launch laid out, so after a restart that pane reads the record.
+    expect(terminal).toMatchObject({
+      ptyId: null,
+      launchAgent: 'claude',
+      agentLaunchLeafId: LEAF_ID
+    })
     expect(store.getState().terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
       type: 'leaf',
       leafId: LEAF_ID
     })
     expect(launchTab()?.viewMode).toBe('chat')
+  })
+
+  it('keeps the prompt for the pane to offer if its agent does not start', () => {
+    publishAgentLaunchTab(request({ prompt: 'fix the build' }))
+    expect(agentLaunchPanePrompt(TAB_ID)).toBe('fix the build')
   })
 
   it('never makes a second tab when a retry names the same one', () => {

@@ -105,10 +105,15 @@ const { initializeMainProcessReady } = await import('./main-process-ready')
 const { mainProcessState: state } = await import('./main-process-state')
 const { createServeDesktopActivationGate } = await import('./serve-desktop-activation')
 const { focusExistingMainWindow } = await import('../window/focus-existing-window')
+const { AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS } = await import('./agent-launch-record-warmup')
 
 type FakeWindow = {
   id: number
-  webContents: { id: number }
+  webContents: {
+    id: number
+    isLoading: () => boolean
+    once: (event: string, listener: () => void) => void
+  }
   isDestroyed: () => boolean
   isMinimized: () => boolean
   restore: () => void
@@ -121,18 +126,23 @@ describe('desktop startup activation', () => {
   let windows: FakeWindow[]
   let ipcHandles: Set<string>
   let trustedRendererId: number | null
-  let windowsWhenRecordStoreOpened: number | null
-  const openRecordStore = vi.fn(() => {
-    windowsWhenRecordStoreOpened = windows.length
-    return Promise.resolve()
-  })
+  let firstLoadListeners: (() => void)[]
+  const openRecordStore = vi.fn(() => Promise.resolve())
 
   // Mirrors openMainWindow's non-idempotent side effects that broke in the field.
   function openMainWindow(): FakeWindow {
     const id = windows.length + 1
     const window: FakeWindow = {
       id,
-      webContents: { id },
+      webContents: {
+        id,
+        isLoading: () => true,
+        once: (event, listener) => {
+          if (event === 'did-finish-load') {
+            firstLoadListeners.push(listener)
+          }
+        }
+      },
       isDestroyed: () => false,
       isMinimized: () => false,
       restore: vi.fn(),
@@ -154,7 +164,7 @@ describe('desktop startup activation', () => {
     showWindowWithoutStealingFocus.mockClear()
     ipcHandles = new Set()
     trustedRendererId = null
-    windowsWhenRecordStoreOpened = null
+    firstLoadListeners = []
     openRecordStore.mockClear()
     launchHooks.duringInstallDirRepair = () => {}
     launchHooks.failBeforeWindow = false
@@ -212,15 +222,25 @@ describe('desktop startup activation', () => {
     }
   )
 
-  it('opens the launch record at startup, after the window, so the first agent launch does not', async () => {
-    await initializeMainProcessReady({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only calls once() on the returned window.
-      openMainWindow: () => openMainWindow() as unknown as NonNullable<typeof state.mainWindow>,
-      handleMacAppActivation: vi.fn()
-    })
+  it('opens the launch record once the window has loaded and settled, so neither startup nor the first agent launch waits on it', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    try {
+      await initializeMainProcessReady({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only calls once() on the returned window.
+        openMainWindow: () => openMainWindow() as unknown as NonNullable<typeof state.mainWindow>,
+        handleMacAppActivation: vi.fn()
+      })
+      expect(openRecordStore).not.toHaveBeenCalled()
 
-    expect(openRecordStore).toHaveBeenCalledTimes(1)
-    expect(windowsWhenRecordStoreOpened).toBe(1)
+      for (const listener of firstLoadListeners) {
+        listener()
+      }
+      expect(openRecordStore).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS)
+      expect(openRecordStore).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not replay an activation when launch fails before the startup window', async () => {

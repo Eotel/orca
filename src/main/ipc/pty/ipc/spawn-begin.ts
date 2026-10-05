@@ -1,5 +1,7 @@
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import { awaitAgentLaunchPaneAttachment } from '../../../agent-launch/agent-launch-pane-attachment'
+import { resolveAgentLaunchPaneVerdict } from '../../../agent-launch/agent-launch-pane-attachment'
+import { formatAgentLaunchPaneRefusal } from '../../../../shared/agent-launch-pane-verdict'
+import { agentLaunchPaneEvidence } from '../pane/agent-launch-pane-evidence'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import type { PtySpawnResult } from '../../../providers/types'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
@@ -38,13 +40,26 @@ export async function beginPtyIpcSpawn(
   ctx: PtyIpcSpawnState
 ): Promise<PtySpawnResult | { isReattach: true } | null> {
   const args = ctx.args
-  // A launch-owned pane attaches to the host's process or shows the launch's failure, never a shell.
+  // A pane an agent launch laid out attaches to its agent or says why it can't, never runs a shell.
   // A replacing spawn already holds the pane: the user restarted it, and that is theirs to run.
-  const launchOwned = ctx.paneSpawnReservation
-    ? null
-    : awaitAgentLaunchPaneAttachment(args.worktreeId, resolveEarlyPaneKey(args))
-  if (launchOwned) {
-    await launchOwned
+  const launchPaneKey = ctx.paneSpawnReservation ? null : resolveEarlyPaneKey(args)
+  const launchVerdict =
+    launchPaneKey && args.worktreeId && args.tabId && args.leafId
+      ? resolveAgentLaunchPaneVerdict(
+          { worktreeId: args.worktreeId, paneKey: launchPaneKey },
+          agentLaunchPaneEvidence(ctx.deps, {
+            worktreeId: args.worktreeId,
+            tabId: args.tabId,
+            leafId: args.leafId,
+            connectionId: args.connectionId
+          })
+        )
+      : null
+  if (launchVerdict) {
+    const verdict = await launchVerdict
+    if (verdict.kind !== 'proceed') {
+      throw new Error(formatAgentLaunchPaneRefusal(verdict))
+    }
   }
   ctx.codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
   ctx.codexHomeLaunchStartedSequence = !args.connectionId

@@ -33,6 +33,8 @@ export type AgentLaunchTabPublishRequest = {
   viewMode: 'terminal' | 'chat'
   placement?: AgentLaunchPlacement
   viewer: AgentLaunchTabViewerRule
+  /** The launch's prompt, so a pane whose agent did not start can offer to copy it. */
+  prompt?: string
 }
 
 export type AgentLaunchTabPublishReply =

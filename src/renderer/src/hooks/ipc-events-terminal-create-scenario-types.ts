@@ -21,6 +21,8 @@ export type TerminalCreateListenerPayload = {
   activate?: boolean
   focus?: boolean
   presentation?: 'background' | 'focused'
+  surfaceOwner?: false
+  launchTabShown?: true
   tabId?: string
   leafId?: string
   splitFromLeafId?: string

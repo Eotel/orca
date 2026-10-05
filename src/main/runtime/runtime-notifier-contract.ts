@@ -64,6 +64,7 @@ export type RuntimeNotifier = {
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
+      launchTabShown?: true
       tabId?: string
       leafId?: string
       splitFromLeafId?: string

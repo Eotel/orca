@@ -117,7 +117,9 @@ const terminalTabSchema = z.object({
   launchAgent: z
     .custom<TuiAgent>((v) => isTuiAgent(v))
     .optional()
-    .catch(undefined)
+    .catch(undefined),
+  // Why: survives a restart so a restored launch pane reads the launch record before it spawns.
+  agentLaunchLeafId: z.string().optional().catch(undefined)
 })
 
 // ─── Unified tab model ──────────────────────────────────────────────

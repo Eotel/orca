@@ -63,6 +63,15 @@ describe('agent.launch params', () => {
     expect(AgentLaunch.parse({ ...BASE, presentation: 'peek' }).presentation).toBeUndefined()
   })
 
+  it('drops a placement id that is not a string instead of refusing the launch', () => {
+    expect(
+      AgentLaunch.parse({ ...BASE, placement: { groupId: 7, afterTabId: 'tab-1' } }).placement
+    ).toEqual({
+      afterTabId: 'tab-1'
+    })
+    expect(AgentLaunch.parse({ ...BASE, placement: 'group-1' }).placement).toBeUndefined()
+  })
+
   it('lets a host from before placement drop it rather than refuse the launch', () => {
     const olderHost = AgentLaunchFields.omit({ placement: true, presentation: true })
     const parsed = olderHost.safeParse({

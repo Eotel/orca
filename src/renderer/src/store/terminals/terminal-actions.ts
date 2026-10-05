@@ -79,6 +79,8 @@ export type TerminalActions = {
       recordInteraction?: boolean
       id?: string
       launchAgent?: TuiAgent
+      /** The leaf a host `agent.launch` laid out before its agent existed. */
+      agentLaunchLeafId?: string
       quickCommandLabel?: string | null
       viewMode?: Tab['viewMode']
       startupCwd?: string

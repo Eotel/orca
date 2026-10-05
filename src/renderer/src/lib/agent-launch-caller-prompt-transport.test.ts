@@ -75,7 +75,7 @@ function launchesThroughHost(args: AgentLaunchCallerProfile['args']): boolean {
 
 /** A prompt the host delivers: one request, nothing the window types or pastes itself. */
 function expectHandedToHost(
-  promptDelivery: 'auto-submit' | 'submit-after-ready' | undefined,
+  promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready' | undefined,
   prompt: string
 ): void {
   expect(hostLaunchRequest(callRuntimeRpc)?.prompt).toEqual({

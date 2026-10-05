@@ -262,7 +262,7 @@ describe('agent launch caller arguments and permission bypass', () => {
       worktreeId: 'wt-1'
     })
 
-    expect(result?.startupPlan.sessionOptions).toEqual({
+    expect(result?.startupPlan?.sessionOptions).toEqual({
       model: 'gpt-5.2-codex',
       effort: 'medium'
     })
@@ -287,7 +287,7 @@ describe('agent launch caller arguments and permission bypass', () => {
       worktreeId: 'wt-1'
     })
 
-    expect(result?.startupPlan.sessionOptions).toBeUndefined()
+    expect(result?.startupPlan?.sessionOptions).toBeUndefined()
     expect(queuedStartupCommand(store)).not.toContain("'-m'")
   })
 })

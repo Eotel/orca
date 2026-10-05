@@ -19,6 +19,7 @@ import {
 } from './agent-launch.test-fixture'
 
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
+const { settledAtCreation } = await import('../../../agent-launch/agent-launch-prompt-delivery')
 const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
 
 const DESKTOP: Partial<RpcContext> = {
@@ -167,5 +168,18 @@ describe('a launch prompt whose caller only reads the result', () => {
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
     expect(runtime.createTerminal.mock.calls[0]?.[1]).not.toHaveProperty('startupPromptPaste')
     expect(observeTerminalLaunchTurnStart).not.toHaveBeenCalled()
+  })
+})
+
+describe('what the launch record says before the proof comes back', () => {
+  it('records a carried prompt a caller acts on as unconfirmed, never as handed over', () => {
+    const carried = { promptRodeLaunchCommand: true }
+    // A host that stops mid-proof must not replay "delivered" to a caller that acts on it.
+    expect(settledAtCreation({ prompt: { ...REQUIRED, delivery: 'submit' } }, carried)).toEqual({
+      outcome: 'unconfirmed'
+    })
+    expect(settledAtCreation({ prompt: { ...BEST_EFFORT, delivery: 'submit' } }, carried)).toEqual({
+      outcome: 'handed-to-terminal'
+    })
   })
 })

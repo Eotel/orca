@@ -10,7 +10,11 @@ const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 /** A launch the host delivers waits on its reply; these tests read only what was sent. */
-const mockCallRuntimeRpc = vi.hoisted(() => vi.fn(() => new Promise(() => {})))
+const mockCallRuntimeRpc = vi.hoisted(() =>
+  vi.fn<(target: unknown, method: string, params: Record<string, unknown>) => Promise<unknown>>(
+    () => new Promise(() => {})
+  )
+)
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: mockCallRuntimeRpc,
   RuntimeRpcCallError: Error

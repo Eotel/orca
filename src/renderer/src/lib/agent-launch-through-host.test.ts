@@ -70,7 +70,7 @@ function terminalResult(paneKey: string, outcome: string) {
   }
 }
 
-function launchTab(tabId: string) {
+function launchTab(tabId: string | null) {
   return store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === tabId)
 }
 
@@ -95,9 +95,9 @@ function launch() {
 }
 
 /** What the host does first: it takes the pane, by asking this window to show the tab. */
-function hostTakesPane(tabId: string): void {
-  const leafId = launchTab(tabId)!.agentLaunchPane!.leafId
-  releaseAgentLaunchPaneSpawn(tabId, leafId)
+function hostTakesPane(tabId: string | null): void {
+  const tab = launchTab(tabId)!
+  releaseAgentLaunchPaneSpawn(tab.id, tab.agentLaunchPane!.leafId)
 }
 
 beforeEach(() => {
@@ -118,8 +118,8 @@ describe('a desktop launch through the host', () => {
     const tab = launchTab(tabId)!
     expect(tab).toMatchObject({ ptyId: null, launchAgent: 'claude' })
     const leafId = tab.agentLaunchPane!.leafId
-    expect(agentLaunchPaneSpawnHold(tabId, leafId)).not.toBeNull()
-    expect(agentLaunchPanePrompt(tabId)).toBe('fix the failing checks')
+    expect(agentLaunchPaneSpawnHold(tab.id, leafId)).not.toBeNull()
+    expect(agentLaunchPanePrompt(tab.id)).toBe('fix the failing checks')
     expect(store.getState().activeTabId).toBe(tabId)
     expect(callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'agent.launchReplay', {
       agent: 'claude',

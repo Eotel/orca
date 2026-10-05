@@ -16,7 +16,11 @@
  */
 
 import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch-operation'
-import { AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import {
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
+} from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch-tab-closed'
 import { isAgentLaunchResult, type AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type {
   AgentSessionOperationOutcome,
@@ -102,6 +106,16 @@ function answerFromRecordedRow(
     : { decision: 'refuse', refusal: replay.refusal }
 }
 
+/** A launch whose tab the user closed answers with its own word only to a caller that reads it. */
+export function readsAgentLaunchTabClosed(
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY) === true
+  )
+}
+
 /** The CLI (no declared client) ships with this host; any other caller must say it reads the word. */
 function readsUnconfirmedLaunchPrompt(
   context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
@@ -145,6 +159,17 @@ function presentRecordedAnswer(
   operationId: string,
   answer: AgentLaunchAdmission
 ): AgentLaunchAdmission {
+  if (
+    answer.decision === 'refuse' &&
+    answer.refusal.code === AGENT_LAUNCH_TAB_CLOSED_CODE &&
+    !readsAgentLaunchTabClosed(context)
+  ) {
+    return refusal(
+      operationId,
+      'agent_session_operation_unknown',
+      'was stopped; its tab was closed'
+    )
+  }
   if (answer.decision !== 'replay') {
     return answer
   }

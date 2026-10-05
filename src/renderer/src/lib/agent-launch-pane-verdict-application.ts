@@ -25,7 +25,7 @@ export function applyAgentLaunchPaneVerdict(event: AgentLaunchPaneVerdictEvent):
     case 'not-started':
     case 'unconfirmed':
       // Final for this pane, for the tab's life: no later spawn needs the launch record.
-      state.setTabAgentLaunchPane(tabId, { leafId, outcome: verdict })
+      state.setTabAgentLaunchPane(tabId, { ...tab.agentLaunchPane, outcome: verdict })
       return
     case 'withdrawn': {
       forgetAgentLaunchPanePrompt(tabId)

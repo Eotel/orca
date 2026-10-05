@@ -65,6 +65,7 @@ import {
   stripSequencedStartupResumeArgv
 } from './host-env/codex-resume'
 import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/linux-terminal-orca-cli-shim'
+import { registerAgentLaunchPaneCloseIpc } from '../agent-launch-pane-close-ipc'
 
 export function registerPtyHandlers(
   mainWindow?: PtyRendererDelivery,
@@ -133,6 +134,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:reportRendererSerializerReady')
   ipcMain.removeHandler('pty:getMainBufferSnapshot')
   ipcMain.removeHandler('pty:sideEffectSnapshot')
+  registerAgentLaunchPaneCloseIpc()
   ipcMain.removeHandler('pty:getRendererDeliveryDebugSnapshot')
   ipcMain.removeHandler('pty:resetRendererDeliveryDebug')
   ipcMain.removeHandler('pty:reportRendererDeliveryState')

@@ -39,6 +39,16 @@ function placementFallback(
   return afterTabId !== undefined && !anchored ? 'active-group' : undefined
 }
 
+function launchPaneFor(request: AgentLaunchTabPublishRequest): {
+  leafId: string
+  operationId?: string
+} {
+  return {
+    leafId: request.leafId,
+    ...(request.operationId ? { operationId: request.operationId } : {})
+  }
+}
+
 export function publishAgentLaunchTab(
   request: AgentLaunchTabPublishRequest
 ): AgentLaunchTabPublished {
@@ -59,8 +69,12 @@ export function publishAgentLaunchTab(
     if (request.prompt) {
       rememberAgentLaunchPanePrompt(tabId, request.prompt)
     }
-    // A new launch into this pane: whatever an earlier launch left on it no longer stands.
-    store.setTabAgentLaunchPane(tabId, { leafId })
+    // A different launch into this pane: what an earlier one left on it no longer stands. A retry of
+    // the same launch is that launch, so its tab and any final verdict stay as they are.
+    const kept = store.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.agentLaunchPane
+    if (kept?.leafId !== leafId || kept.operationId !== request.operationId) {
+      store.setTabAgentLaunchPane(tabId, launchPaneFor(request))
+    }
     return { tabId, created: false, placement: { groupId } }
   }
 
@@ -83,7 +97,7 @@ export function publishAgentLaunchTab(
   const tab = store.createTab(worktreeId, placement.groupId, undefined, {
     id: tabId,
     initialLeafId: leafId,
-    agentLaunchPane: { leafId },
+    agentLaunchPane: launchPaneFor(request),
     launchAgent: request.launchAgent,
     viewMode: request.viewMode,
     ...(focuses ? {} : { activate: false, recordInteraction: false })

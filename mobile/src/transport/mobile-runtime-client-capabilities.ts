@@ -8,6 +8,7 @@ import {
 } from '../../../src/shared/protocol-version'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
   AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
 } from '../../../src/shared/agent-launch-runtime-capability'
 import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime-client-capabilities'
@@ -25,7 +26,9 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   // agent stays a PTY.
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   // Reads a listed launch tab with no terminal yet as not started, so the host may show it early.
-  AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
+  AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY,
+  // Reads `agent_launch_tab_closed` (its tab was closed on the computer) as a definite answer.
+  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
 ])
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD =

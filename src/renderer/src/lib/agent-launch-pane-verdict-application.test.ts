@@ -55,7 +55,7 @@ beforeEach(() => {
   store.getState().setActiveWorktree(WT)
   tabId = store.getState().createTab(WT, undefined, undefined, {
     initialLeafId: LEAF,
-    agentLaunchPane: { leafId: LEAF }
+    agentLaunchPane: { leafId: LEAF, operationId: 'op-1' }
   }).id
   rememberAgentLaunchPanePrompt(tabId, 'fix the build')
 })
@@ -69,7 +69,11 @@ describe("a launch pane's verdict in the window", () => {
 
   it('final: the tab keeps it for its life', () => {
     apply({ kind: 'unconfirmed' })
-    expect(launchTab()?.agentLaunchPane).toEqual({ leafId: LEAF, outcome: { kind: 'unconfirmed' } })
+    expect(launchTab()?.agentLaunchPane).toEqual({
+      leafId: LEAF,
+      operationId: 'op-1',
+      outcome: { kind: 'unconfirmed' }
+    })
     expect(agentLaunchPanePrompt(tabId)).toBe('fix the build')
   })
 
@@ -101,9 +105,20 @@ describe("a launch pane's verdict in the window", () => {
 })
 
 describe('the user closing a launch tab', () => {
-  it('is remembered while its agent is starting, so the agent stops when it arrives', () => {
-    store.getState().closeTab(tabId)
+  it('tells the host and is remembered while its agent is starting, so the agent stops', () => {
+    const notifyAgentLaunchPaneClosed = vi.fn()
+    vi.stubGlobal('window', { api: { ui: { notifyAgentLaunchPaneClosed } } })
+    try {
+      store.getState().closeTab(tabId)
+    } finally {
+      vi.unstubAllGlobals()
+    }
     expect(wasAgentLaunchPaneClosedByUser(tabId, LEAF)).toBe(true)
+    expect(notifyAgentLaunchPaneClosed).toHaveBeenCalledWith({
+      worktreeId: WT,
+      tabId,
+      leafId: LEAF
+    })
   })
 
   it('is not, for a tab whose launch already has its outcome', () => {

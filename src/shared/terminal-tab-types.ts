@@ -100,9 +100,10 @@ export type TerminalTab = {
    * The pane an `agent.launch` laid out before its agent existed, while its fate is open or once it
    * is final. Pending (no `outcome`): the pane's spawn reads the launch record. Cleared once the
    * agent attaches or the pane is an ordinary terminal again. `outcome`: the launch never ran there,
-   * and the pane says so for the tab's life, until a new launch reuses it.
+   * and the pane says so for the tab's life, until a different launch (`operationId`) reuses it; a
+   * retry of the same launch changes nothing.
    */
-  agentLaunchPane?: { leafId: string; outcome?: AgentLaunchPaneOutcome }
+  agentLaunchPane?: { leafId: string; operationId?: string; outcome?: AgentLaunchPaneOutcome }
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
    *  not by the user doing work. Without this flag the resulting

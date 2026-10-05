@@ -35,6 +35,8 @@ export type AgentLaunchTabPublishRequest = {
   viewer: AgentLaunchTabViewerRule
   /** The launch's prompt, so a pane whose agent did not start can offer to copy it. */
   prompt?: string
+  /** Which launch this is: a retry of the same one never resets what the tab keeps about it. */
+  operationId?: string
 }
 
 export type AgentLaunchTabPublishReply =

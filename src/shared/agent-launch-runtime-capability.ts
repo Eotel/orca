@@ -43,6 +43,11 @@ export const AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY = 'agent.launch.placement
 // spawn only for a client that says so.
 export const AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY = 'agent.launch.unstarted-tab.v1' as const
 
+// Client-advertised only: the client reads `agent_launch_tab_closed` (the user closed the launch's
+// tab while it started, so it was stopped) as a definite answer. Others get
+// `agent_session_operation_unknown` for it, as before the host knew.
+export const AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY = 'agent.launch.tab-closed.v1' as const
+
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,

@@ -19,7 +19,11 @@ import type {
   AgentLaunchPaneVerdict
 } from '../../shared/agent-launch-pane-verdict'
 
-type RunningLaunch = { finished: Promise<{ tabTakenBack: boolean }> }
+type RunningLaunch = {
+  finished: Promise<{ tabTakenBack: boolean }>
+  /** The user closed the launch's tab while it waited; set by the window's close. */
+  closedByUser: boolean
+}
 
 const runningLaunchesByPane = new Map<string, RunningLaunch>()
 
@@ -30,6 +34,8 @@ function paneKeyOf(pane: AgentSessionOperationOwnedPane): string {
 export type RunningAgentLaunchPane = {
   /** The launch is over; its record says how. `tabTakenBack`: the host is closing the tab. */
   finish(outcome: { tabTakenBack: boolean }): void
+  /** The user closed this launch's tab while it waited: the launch must not run, or must stop. */
+  closedByUser(): boolean
 }
 
 /** Registered before the window hears of the tab, so a pane that mounts at once already waits. */
@@ -41,7 +47,8 @@ export function trackRunningAgentLaunchPane(
   const running: RunningLaunch = {
     finished: new Promise((done) => {
       resolve = done
-    })
+    }),
+    closedByUser: false
   }
   runningLaunchesByPane.set(key, running)
   let finished = false
@@ -55,7 +62,16 @@ export function trackRunningAgentLaunchPane(
         runningLaunchesByPane.delete(key)
       }
       resolve(outcome)
-    }
+    },
+    closedByUser: () => running.closedByUser
+  }
+}
+
+/** The window's report that the user closed a pane's tab; only a launch still running cares. */
+export function markAgentLaunchPaneClosedByUser(pane: AgentSessionOperationOwnedPane): void {
+  const running = runningLaunchesByPane.get(paneKeyOf(pane))
+  if (running) {
+    running.closedByUser = true
   }
 }
 

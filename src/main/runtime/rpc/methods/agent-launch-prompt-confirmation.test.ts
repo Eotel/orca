@@ -175,10 +175,17 @@ describe('what the launch record says before the proof comes back', () => {
   it('records a carried prompt a caller acts on as unconfirmed, never as handed over', () => {
     const carried = { promptRodeLaunchCommand: true }
     // A host that stops mid-proof must not replay "delivered" to a caller that acts on it.
-    expect(settledAtCreation({ prompt: { ...REQUIRED, delivery: 'submit' } }, carried)).toEqual({
+    expect(
+      settledAtCreation(
+        { prompt: { text: REQUIRED.text, delivery: 'submit', confirmation: 'required' } },
+        carried
+      )
+    ).toEqual({
       outcome: 'unconfirmed'
     })
-    expect(settledAtCreation({ prompt: { ...BEST_EFFORT, delivery: 'submit' } }, carried)).toEqual({
+    expect(
+      settledAtCreation({ prompt: { text: BEST_EFFORT.text, delivery: 'submit' } }, carried)
+    ).toEqual({
       outcome: 'handed-to-terminal'
     })
   })

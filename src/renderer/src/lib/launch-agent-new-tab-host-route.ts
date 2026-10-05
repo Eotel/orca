@@ -43,7 +43,8 @@ function settleNewTabHostDelivery(
   delivery: HostAgentLaunchDelivery,
   args: {
     worktreeId: string
-    tabId: string
+    /** Null when the host showed the tab. */
+    tabId: string | null
     agent: TuiAgent
     prompt: string
     actsOnResult: boolean
@@ -53,6 +54,7 @@ function settleNewTabHostDelivery(
   const { agent, prompt } = args
   const userClosedTab =
     delivery.kind !== 'not-started' &&
+    args.tabId !== null &&
     !(useAppStore.getState().tabsByWorktree[args.worktreeId] ?? []).some(
       (tab) => tab.id === args.tabId
     )
@@ -87,7 +89,7 @@ function settleNewTabHostDelivery(
       showAgentLaunchOutcomeNotice({
         outcome: delivery.unconfirmed
           ? { kind: 'unconfirmed' }
-          : { kind: 'not-started', ...(delivery.code ? { code: delivery.code } : {}) },
+          : { kind: 'not-started', code: delivery.code ?? '' },
         prompt
       })
       return { delivered: false, failureNotified: true }
@@ -105,7 +107,8 @@ export function launchNewTabPromptThroughHost(
     onPromptDelivered?: () => void
   }
 ): {
-  tabId: string
+  /** Null when the host shows the tab itself. */
+  tabId: string | null
   promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
 } {
   const { promptDelivery, onPromptDelivered, ...launch } = args
@@ -118,9 +121,10 @@ export function launchNewTabPromptThroughHost(
   // agent's transcript shows, so it could never prune this copy.
   const seeded =
     actsOnResult &&
+    tabId !== null &&
     seedNativeChatLaunchPromptForAgentTab({ tabId, agent: launch.agent, text: launch.prompt })
   const result = delivery.then((settled) => {
-    if (seeded && (settled.kind === 'not-delivered' || settled.kind === 'pane-says')) {
+    if (seeded && tabId && (settled.kind === 'not-delivered' || settled.kind === 'pane-says')) {
       useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
     }
     return settleNewTabHostDelivery(settled, {

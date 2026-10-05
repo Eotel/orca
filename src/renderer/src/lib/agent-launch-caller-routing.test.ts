@@ -71,6 +71,11 @@ vi.mock('@/lib/launch-agent-in-new-tab-structured', () => ({
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => mockHostCapabilities()
 }))
+// A launch the host delivers waits on its reply; these tests read only the surface it named.
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: vi.fn(() => new Promise(() => {})),
+  RuntimeRpcCallError: Error
+}))
 /** What the paired server that owns 'wt-1' last reported about itself. */
 function serverReports(capabilities: readonly string[] | null): void {
   Object.assign(store, {
@@ -146,11 +151,13 @@ describe('agent launch caller routing', () => {
 
       // Why: two profiles are structurally barred rather than merely unconfigured — the floating
       // sentinel has no workspace a session can live in, and a caller-named cwd is a process shape
-      // only a PTY produces. Both must stay terminal even with the structured default on.
+      // only a PTY produces. Both must stay terminal even with the structured default on. With that
+      // default the host decides a prompt's surface, so it shows that terminal's tab itself.
       const structurallyBarred =
         profile.id === 'floating-default-agent' || profile.id === 'session-continuation'
+      const terminalSurface = profile.args.prompt ? 'host-published' : 'local-terminal'
       expect(result?.surface.kind).toBe(
-        structurallyBarred ? 'local-terminal' : 'local-agent-session'
+        structurallyBarred ? terminalSurface : 'local-agent-session'
       )
     }
   )

@@ -219,4 +219,44 @@ describe('a desktop launch through the host', () => {
     expect(params).not.toHaveProperty('operationId')
     expect(params).not.toHaveProperty('paneKey')
   })
+
+  describe('when chat is the default', () => {
+    beforeEach(() => {
+      store.setState({
+        settings: {
+          ...store.getState().settings!,
+          experimentalNativeChat: true,
+          experimentalStructuredNativeChat: true,
+          openAgentTabsInChatByDefault: true
+        }
+      })
+    })
+
+    it('leaves the tab to the host, which alone knows if this ends as a chat', () => {
+      callRuntimeRpc.mockReturnValue(new Promise(() => {}))
+      const tabsBefore = store.getState().tabsByWorktree[WT]?.length ?? 0
+
+      expect(launch().tabId).toBeNull()
+
+      expect(store.getState().tabsByWorktree[WT]?.length ?? 0).toBe(tabsBefore)
+      expect(lastParams().paneKey).toEqual(expect.any(String))
+    })
+
+    it('leaves a failed launch to the tab the host showed, and says it when it showed none', async () => {
+      callRuntimeRpc.mockRejectedValueOnce(rpcError('agent_session_operation_unknown'))
+      await expect(launch().delivery).resolves.toEqual({
+        kind: 'not-started',
+        unconfirmed: true,
+        code: 'agent_session_operation_unknown'
+      })
+
+      const reply = deferred<unknown>()
+      callRuntimeRpc.mockReturnValueOnce(reply.promise)
+      const { delivery } = launch()
+      const [tabId, leafId] = (lastParams().paneKey as string).split(':')
+      store.getState().createTab(WT, undefined, undefined, { id: tabId, initialLeafId: leafId })
+      reply.reject(rpcError('agent_session_operation_unknown'))
+      await expect(delivery).resolves.toEqual({ kind: 'pane-says' })
+    })
+  })
 })

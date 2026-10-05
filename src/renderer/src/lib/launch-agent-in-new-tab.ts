@@ -206,7 +206,9 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       ...(onPromptDelivered ? { onPromptDelivered } : {})
     })
     return {
-      surface: { kind: 'local-terminal', tabId: launched.tabId },
+      surface: launched.tabId
+        ? { kind: 'local-terminal', tabId: launched.tabId }
+        : { kind: 'host-published' },
       pasteDraftAfterLaunch: false,
       ...(launched.promptDeliveryResult
         ? { promptDeliveryResult: launched.promptDeliveryResult }

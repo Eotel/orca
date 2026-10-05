@@ -246,7 +246,9 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
-  it('hands a prompted Codex launch to the host in a tab it opens in chat view', async () => {
+  // Why the host's tab: with chat the default, only the host can say whether this ends as a chat,
+  // which would name its tab by the launch's pane; the window makes none it might have to take back.
+  it('hands a prompted Codex launch to the host, which shows its tab when chat is the default', async () => {
     store.settings = {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
@@ -266,14 +268,8 @@ describe('launchAgentInNewTab', () => {
       promptDelivery: 'submit-after-ready'
     })
 
-    const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : undefined
-    expect(mockCreateTab).toHaveBeenCalledWith(
-      'wt-1',
-      undefined,
-      undefined,
-      expect.objectContaining({ id: tabId, launchAgent: 'codex', viewMode: 'chat' })
-    )
-    // The host carries the prompt; the chat still shows it from the start.
+    expect(result?.surface).toEqual({ kind: 'host-published' })
+    expect(mockCreateTab).not.toHaveBeenCalled()
     expect(hostRequest()?.prompt).toEqual({
       text: 'large generated prompt',
       delivery: 'submit',
@@ -281,28 +277,20 @@ describe('launchAgentInNewTab', () => {
     })
     expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
     expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
-    expect(mockSeedNativeChatLaunchPrompt).toHaveBeenCalledWith({
-      tabId,
-      agent: 'codex',
-      text: 'large generated prompt',
-      createdAt: expect.any(Number)
-    })
-    expect(mockSetTabViewMode).not.toHaveBeenCalled()
   })
 
-  it('opens local Grok submit-after-ready launches in native chat', async () => {
+  it('opens the tab at the click and seeds its chat copy when a terminal is the default', async () => {
     store.settings = {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
       openAgentTabsInChatByDefault: true
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    const result = launchAgentInNewTab({
       requestId: 'request-4',
       agent: 'grok',
       worktreeId: 'wt-1',
@@ -310,17 +298,21 @@ describe('launchAgentInNewTab', () => {
       promptDelivery: 'submit-after-ready'
     })
 
+    const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : undefined
     expect(mockCreateTab).toHaveBeenCalledWith(
       'wt-1',
       undefined,
       undefined,
-      expect.objectContaining({ launchAgent: 'grok', viewMode: 'chat' })
+      expect.objectContaining({ id: tabId, launchAgent: 'grok', viewMode: 'chat' })
     )
-    expect(mockSeedNativeChatLaunchPrompt).toHaveBeenCalledWith(
-      expect.objectContaining({ agent: 'grok', text: 'large generated prompt' })
-    )
+    expect(mockSeedNativeChatLaunchPrompt).toHaveBeenCalledWith({
+      tabId,
+      agent: 'grok',
+      text: 'large generated prompt',
+      createdAt: expect.any(Number)
+    })
+    expect(mockSetTabViewMode).not.toHaveBeenCalled()
   })
-
   it('seeds no chat copy of a typed prompt, which the host may put in a launch file', async () => {
     store.settings = {
       agentCmdOverrides: {},
@@ -498,12 +490,6 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(hostRequest()?.sessionOptions).toEqual({ model: 'gpt-5.2-codex', effort: 'medium' })
-    expect(mockCreateTab).toHaveBeenCalledWith(
-      'wt-1',
-      undefined,
-      undefined,
-      expect.objectContaining({ viewMode: 'chat', quickCommandLabel: 'Review' })
-    )
     expect(mockSetTabViewMode).not.toHaveBeenCalled()
   })
 

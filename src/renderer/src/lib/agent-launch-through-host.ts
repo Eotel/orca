@@ -24,6 +24,7 @@ import {
   type AgentLaunchPromptConfirmation
 } from '../../../shared/agent-launch-intent'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { prefersStructuredNativeChatByDefault } from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { Tab } from '../../../shared/tab-types'
@@ -132,7 +133,7 @@ async function launchWithoutRecord(args: HostAgentLaunchArgs): Promise<HostAgent
 
 async function settleLaunch(
   args: HostAgentLaunchArgs,
-  pane: { tabId: string; leafId: string },
+  pane: { tabId: string; leafId: string; windowMade: boolean },
   send: Promise<unknown>,
   releaseHold: () => void
 ): Promise<HostAgentLaunchDelivery> {
@@ -141,13 +142,20 @@ async function settleLaunch(
   } catch (error) {
     const code = error instanceof RuntimeRpcCallError ? error.code : undefined
     if (code === 'agent_session_operation_capacity') {
-      closeLaunchTab(args.worktreeId, pane.tabId)
+      if (pane.windowMade) {
+        closeLaunchTab(args.worktreeId, pane.tabId)
+      }
       return launchWithoutRecord(args)
     }
-    // A pane the host never took would open as a shell, and a refused one is the host's to take back.
-    const hostTookPane = !isAgentLaunchPaneSpawnHeld(pane.tabId, pane.leafId)
+    // The host took the pane once it showed the tab; a window-made pane it never took would open as
+    // a shell, and a refused one is the host's to take back.
+    const hostTookPane = pane.windowMade
+      ? !isAgentLaunchPaneSpawnHeld(pane.tabId, pane.leafId)
+      : tabExists(args.worktreeId, pane.tabId)
     if (!hostTookPane || (code !== undefined && ADMISSION_REFUSAL_CODES.has(code))) {
-      closeLaunchTab(args.worktreeId, pane.tabId)
+      if (pane.windowMade) {
+        closeLaunchTab(args.worktreeId, pane.tabId)
+      }
       return {
         kind: 'not-started',
         unconfirmed: code === 'agent_session_operation_unknown',
@@ -161,20 +169,30 @@ async function settleLaunch(
 }
 
 export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
-  tabId: string
+  /** Null when the host shows the tab itself. */
+  tabId: string | null
   delivery: Promise<HostAgentLaunchDelivery>
 } {
   const store = useAppStore.getState()
   const tabId = createBrowserUuid()
   const leafId = createBrowserUuid()
+  // Why: the window makes the tab only where the host cannot turn the launch into a chat, which the
+  // host's own first check reads off these same settings; a chat names its tab by this pane's tab.
+  const windowMakesTab = !prefersStructuredNativeChatByDefault(store.settings)
   // Before the tab exists, so its first mount already waits.
-  const releaseHold = holdAgentLaunchPaneSpawn(tabId, leafId)
+  const releaseHold = windowMakesTab ? holdAgentLaunchPaneSpawn(tabId, leafId) : () => {}
   const send = callRuntimeRpc<unknown>({ kind: 'local' }, 'agent.launchReplay', {
     ...launchParams(args),
     // A new click is a new operation; the pane is this click's too.
     operationId: createAgentSessionOperationId(),
     paneKey: makePaneKey(tabId, leafId)
   })
+  if (!windowMakesTab) {
+    return {
+      tabId: null,
+      delivery: settleLaunch(args, { tabId, leafId, windowMade: false }, send, releaseHold)
+    }
+  }
   store.createTab(args.worktreeId, args.groupId, undefined, {
     id: tabId,
     initialLeafId: leafId,
@@ -189,5 +207,8 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
   // Why: without it an activated launch can stay hidden behind an editor.
   store.setActiveTabType('terminal', args.worktreeId)
   persistAgentLaunchTabOrder(args.worktreeId, tabId)
-  return { tabId, delivery: settleLaunch(args, { tabId, leafId }, send, releaseHold) }
+  return {
+    tabId,
+    delivery: settleLaunch(args, { tabId, leafId, windowMade: true }, send, releaseHold)
+  }
 }

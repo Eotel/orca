@@ -34,6 +34,7 @@ export type AgentLaunchPaneVerdictEvent = AgentLaunchPaneAddress & {
 export const agentLaunchPaneOnTabSchema = z
   .object({
     leafId: z.string(),
+    operationId: z.string().optional(),
     outcome: z.custom<AgentLaunchPaneOutcome>(isAgentLaunchPaneOutcome).optional()
   })
   .optional()

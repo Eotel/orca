@@ -5,7 +5,10 @@ import type {
   AgentLaunchTabPublishReply,
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch-tab-publication'
-import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+import type {
+  AgentLaunchPaneAddress,
+  AgentLaunchPaneVerdictEvent
+} from '../../shared/agent-launch-pane-verdict'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -107,6 +110,9 @@ export const uiTerminalAndSessionTabsApi = {
   },
   replyAgentLaunchTabPublish: (reply: AgentLaunchTabPublishReply): void => {
     ipcRenderer.send('agentLaunch:tabPublishReply', reply)
+  },
+  notifyAgentLaunchPaneClosed: (pane: AgentLaunchPaneAddress): void => {
+    ipcRenderer.send('agentLaunch:paneClosed', pane)
   },
   onAgentLaunchPaneVerdict: (
     callback: (data: AgentLaunchPaneVerdictEvent) => void

@@ -6,6 +6,7 @@ import {
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
+  markAgentLaunchPaneClosedByUser,
   resetAgentLaunchPanesForTests,
   resolveAgentLaunchPaneVerdict,
   trackRunningAgentLaunchPane,
@@ -92,6 +93,16 @@ describe('a pane an agent launch laid out', () => {
       kind: 'not-started',
       code: 'agent_session_exited_during_start'
     })
+  })
+
+  it("hears the user's close only while the pane's launch is running", () => {
+    markAgentLaunchPaneClosedByUser(PANE)
+    const running = trackRunningAgentLaunchPane(PANE)
+    expect(running.closedByUser()).toBe(false)
+    markAgentLaunchPaneClosedByUser({ worktreeId: 'wt-1', paneKey: 'tab-9:leaf-9' })
+    expect(running.closedByUser()).toBe(false)
+    markAgentLaunchPaneClosedByUser(PANE)
+    expect(running.closedByUser()).toBe(true)
   })
 
   it('never offers a shell in a tab the host is taking back', async () => {

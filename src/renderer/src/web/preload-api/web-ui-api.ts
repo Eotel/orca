@@ -246,6 +246,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     replyTerminalCreate: () => {},
     onPublishAgentLaunchTab: () => noopUnsubscribe,
     onAgentLaunchPaneVerdict: () => noopUnsubscribe,
+    notifyAgentLaunchPaneClosed: () => {},
     replyAgentLaunchTabPublish: () => {},
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,

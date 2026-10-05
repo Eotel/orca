@@ -10,7 +10,8 @@ import {
   PROMPTED_AGENT_LAUNCH_TIMEOUT_MS,
   launchAgentInExistingWorkspace,
   reserveMobileAgentLaunch,
-  supportsMobileExistingAgentLaunch
+  supportsMobileExistingAgentLaunch,
+  AGENT_LAUNCH_TAB_CLOSED_MESSAGE
 } from './mobile-existing-agent-launch'
 
 // A connected client whose only behaviour is the scripted `sendRequest`.
@@ -246,6 +247,14 @@ describe('launchAgentInExistingWorkspace', () => {
     await expect(launch(client)).resolves.toEqual({
       kind: 'failed',
       message: 'Workspace not found'
+    })
+  })
+
+  it('says the launch was stopped when its tab was closed on the computer, in its own words', async () => {
+    const { client } = scriptedClient(refused('agent_launch_tab_closed'))
+    await expect(launch(client)).resolves.toEqual({
+      kind: 'failed',
+      message: AGENT_LAUNCH_TAB_CLOSED_MESSAGE
     })
   })
 

@@ -20,6 +20,7 @@
  */
 
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import type { AgentLaunchIntent, AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import { agentSessionOperationKey } from '../../../../shared/agent-session-operation-ledger'
@@ -35,6 +36,13 @@ import {
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
 import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
+import {
+  AgentLaunchExecutionError,
+  agentLaunchTabClosedAnswer,
+  settleLaunchWhoseTabWasClosed,
+  settleQuietly,
+  withEarlyTab
+} from './agent-launch-execution-outcome'
 import { AgentLaunch, AgentLaunchReplay, type AgentLaunchParams } from './agent-launch-schemas'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import {
@@ -47,12 +55,7 @@ import {
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
-import {
-  publishEarlyTab,
-  withPlacement,
-  type AgentLaunchView,
-  type EarlyAgentLaunchTab
-} from './agent-launch-tab-publication'
+import { publishEarlyTab, withPlacement, type AgentLaunchView } from './agent-launch-tab-publication'
 
 /**
  * Advertising `agent.launch.v2` is a client's statement that it understands EITHER outcome — a
@@ -98,7 +101,7 @@ async function runAgentLaunch(
       replaySafe?.callerKey,
       callerNavigationId !== null,
       replaySafe?.terminalSpawn,
-      () => view.early?.windowShowsTab() === true
+      view.early
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
@@ -111,19 +114,6 @@ async function runAgentLaunch(
     }
   })
   return withPlacement(result, view)
-}
-
-/** Runs a launch whose tab may already be showing. Its pane reads how the launch ended off the
- *  launch record, which every path below settles before this returns. */
-async function withEarlyTab<T>(
-  early: EarlyAgentLaunchTab | null,
-  run: () => Promise<T>
-): Promise<T> {
-  try {
-    return await run()
-  } finally {
-    early?.finish()
-  }
 }
 
 /**
@@ -156,25 +146,9 @@ function runLegacyAgentLaunch(
   return execute()
 }
 
-function settleQuietly(settlement: Promise<void>): Promise<void> {
-  return settlement.catch((error: unknown) => {
-    console.warn('[agent-launch] the launch settled, its operation row did not', error)
-  })
-}
-
 type ActiveAgentLaunch = {
   fingerprint: string
   promise: Promise<AgentLaunchResult>
-}
-
-class AgentLaunchExecutionError extends Error {
-  constructor(
-    cause: unknown,
-    /** Decided once, by the launch that ran; a later reader cannot re-derive it from the error. */
-    readonly failedWithoutEffects: boolean
-  ) {
-    super('agent_session_operation_unknown', { cause })
-  }
 }
 
 const activeAgentLaunchesByRuntime = new WeakMap<
@@ -256,6 +230,9 @@ async function executeAdmittedAgentLaunch(
       recordSurface: (provisional) => void settleQuietly(admission.record(provisional))
     })
   } catch (error) {
+    if (view.early?.closedByUser()) {
+      await settleLaunchWhoseTabWasClosed(context, view.early, admission)
+    }
     const failedWithoutEffects = launchFailureWithoutEffectsCode(
       error,
       intent.target.kind,
@@ -265,6 +242,10 @@ async function executeAdmittedAgentLaunch(
       await settleQuietly(admission.fail(failedWithoutEffects))
     }
     throw new AgentLaunchExecutionError(error, failedWithoutEffects !== null)
+  }
+  if (view.early?.closedByUser()) {
+    // The user closed its tab after the spawn left: the agent stops, as any closed tab's does.
+    await settleLaunchWhoseTabWasClosed(context, view.early, admission)
   }
   // Bookkeeping: a failure leaves the first write, whose owed prompt replays as `unconfirmed` (or as
   // `unknown` to a caller that cannot read it), never as `not-delivered`.
@@ -316,6 +297,9 @@ export const AGENT_LAUNCH_METHODS = [
               code: WORKTREE_CREATE_COLLISION_CODE
             })
           }
+          if (error.cause instanceof AgentLaunchTabClosedError) {
+            throw agentLaunchTabClosedAnswer(context)
+          }
           if (error.failedWithoutEffects) {
             throw error.cause
           }
@@ -343,7 +327,12 @@ export const AGENT_LAUNCH_METHODS = [
         context
       ).catch((error: unknown) => {
         // Preserve the original error contract for callers of the optional-identity method.
-        throw error instanceof AgentLaunchExecutionError ? error.cause : error
+        if (error instanceof AgentLaunchExecutionError) {
+          throw error.cause instanceof AgentLaunchTabClosedError
+            ? agentLaunchTabClosedAnswer(context)
+            : error.cause
+        }
+        throw error
       })
     }
   })

@@ -42,6 +42,8 @@ import {
   trackTerminalSpawnDispatch,
   type TerminalSpawnDispatch
 } from '../../../agent-launch/agent-launch-not-started'
+import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
+import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 
 /** Replay-safe launches keep the nested attach in the same stable caller namespace as the launch. */
 export function agentLaunchSurfaceFactory(
@@ -51,9 +53,9 @@ export function agentLaunchSurfaceFactory(
   // True when the launch shows its surface to the paired caller itself rather than to everyone.
   callerPresentsSurface = false,
   terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch(),
-  // Whether the window has shown this launch's tab and moved whoever should move; asked at spawn,
-  // since its answer can land after admission.
-  windowShowsLaunchTab: () => boolean = () => false
+  // The tab shown before the launch ran; asked at spawn, since the window's answer and the user's
+  // close can both land after admission.
+  earlyTab: Pick<EarlyAgentLaunchTab, 'windowShowsTab' | 'closedByUser'> | null = null
 ): AgentLaunchSurfaceFactory {
   // Only a caller that reads `unconfirmed` can be told a carried prompt was not proven.
   const confirmsPrompt = (confirmation: AgentLaunchPromptConfirmation | undefined): boolean =>
@@ -136,6 +138,10 @@ export function agentLaunchSurfaceFactory(
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
       let promptRodeLaunchCommand = false
+      if (earlyTab?.closedByUser()) {
+        // The user closed its tab while it waited: nothing is spawned, and that is the answer.
+        terminalSpawn.rethrow(new AgentLaunchTabClosedError())
+      }
       const launchStartedAt = Date.now()
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
@@ -163,7 +169,7 @@ export function agentLaunchSurfaceFactory(
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),
         ...(viewMode ? { viewMode } : {}),
-        ...(windowShowsLaunchTab() ? { surfaceOwner: false as const } : {}),
+        ...(earlyTab?.windowShowsTab() ? { surfaceOwner: false as const } : {}),
         onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
       })
       const terminal = await created.catch(terminalSpawn.rethrow)

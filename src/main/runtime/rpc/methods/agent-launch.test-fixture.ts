@@ -166,7 +166,8 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     ),
     // A pane this runtime created or adopted is running its process.
     hasLiveTerminalForPaneKey: vi.fn((paneKey: string) => handlesByPaneKey.has(paneKey)),
-    openedAgentSessionRecordStore: vi.fn(() => launchRecordStore)
+    openedAgentSessionRecordStore: vi.fn((): AgentSessionRecordStore | null => launchRecordStore),
+    closeTerminal: vi.fn(async (_handle: string) => ({}))
   }
 }
 

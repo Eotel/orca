@@ -98,16 +98,28 @@ describe('publishing a launch tab before its agent exists', () => {
     const again = publishAgentLaunchTab(request({ requestId: 'request-2' }))
 
     expect(again).toMatchObject({ tabId: TAB_ID, created: false })
-    // A new launch into the pane: an earlier launch's outcome no longer stands.
+    expect(store.getState().tabsByWorktree[WT]?.filter((tab) => tab.id === TAB_ID)).toHaveLength(1)
+  })
+
+  it("keeps a launch's final outcome on a retry of that launch; a different launch resets it", () => {
+    const launchPane = () =>
+      store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)?.agentLaunchPane
+    publishAgentLaunchTab(request({ operationId: 'op-1' }))
     store.getState().setTabAgentLaunchPane(TAB_ID, {
       leafId: LEAF_ID,
+      operationId: 'op-1',
       outcome: { kind: 'unconfirmed' }
     })
-    publishAgentLaunchTab(request({ requestId: 'request-3' }))
-    expect(
-      store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)?.agentLaunchPane
-    ).toEqual({ leafId: LEAF_ID })
-    expect(store.getState().tabsByWorktree[WT]?.filter((tab) => tab.id === TAB_ID)).toHaveLength(1)
+
+    publishAgentLaunchTab(request({ requestId: 'request-2', operationId: 'op-1' }))
+    expect(launchPane()).toEqual({
+      leafId: LEAF_ID,
+      operationId: 'op-1',
+      outcome: { kind: 'unconfirmed' }
+    })
+
+    publishAgentLaunchTab(request({ requestId: 'request-3', operationId: 'op-2' }))
+    expect(launchPane()).toEqual({ leafId: LEAF_ID, operationId: 'op-2' })
   })
 
   it('hands a tab this window made for the launch to the host, as the launch to take back', async () => {

@@ -12,6 +12,7 @@ import type {
   AgentLaunchResult
 } from '../../../src/shared/agent-launch-intent'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../src/shared/agent-launch-tab-closed'
 import { makePaneKey } from '../../../src/shared/stable-pane-id'
 import { createStructuredAgentSessionId } from '../../../src/shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
@@ -43,6 +44,8 @@ export const AGENT_LAUNCH_UNCONFIRMED_MESSAGE =
 
 // The host started nothing, and the next tap reserves new ids.
 export const AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE = "Couldn't start the agent. Try again."
+export const AGENT_LAUNCH_TAB_CLOSED_MESSAGE =
+  "The agent's tab was closed on the computer before it started, so it was stopped."
 
 /**
  * The tab a launch will create, named by this device before it asks, so it can land there as soon
@@ -164,6 +167,9 @@ function classifyLaunchRefusal(
     case 'failed': {
       if (isAgentLaunchReservationTakenRefusal(error)) {
         return { kind: 'failed', message: AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE }
+      }
+      if (error.code === AGENT_LAUNCH_TAB_CLOSED_CODE) {
+        return { kind: 'failed', message: AGENT_LAUNCH_TAB_CLOSED_MESSAGE }
       }
       const message = error.message?.trim()
       return { kind: 'failed', message: message || "Couldn't start the agent." }

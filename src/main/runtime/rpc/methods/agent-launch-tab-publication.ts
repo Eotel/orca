@@ -24,14 +24,21 @@ import type {
   AgentLaunchTabPublished,
   AgentLaunchTabViewerRule
 } from '../../../../shared/agent-launch-tab-publication'
-import type { AgentSessionOperationOwnedPane } from '../../../../shared/agent-session-operation-ledger'
+import {
+  listAgentSessionOperationRowsOwningPane,
+  type AgentSessionOperationOwnedPane
+} from '../../../../shared/agent-session-operation-ledger'
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
 } from '../../../../shared/runtime-navigation'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
-import { trackRunningAgentLaunchPane } from '../../../agent-launch/agent-launch-pane-attachment'
+import {
+  agentLaunchPaneVerdictFromRecord,
+  trackRunningAgentLaunchPane
+} from '../../../agent-launch/agent-launch-pane-attachment'
+import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch-pane-verdict'
 import {
   decideAgentLaunchMode,
   readAgentLaunchModeSettings
@@ -85,6 +92,8 @@ export type EarlyAgentLaunchTab = {
   surfacePublished(result: AgentLaunchResult): void
   /** The window has said it shows the tab, so the spawn must bind it without a second reveal. */
   windowShowsTab(): boolean
+  /** The user closed the tab while it waited: the launch must not start its agent, or must stop it. */
+  closedByUser(): boolean
   /** The launch is over, however it ended. A tab this request made goes when nothing will ever run
    *  in it: never admitted, or its surface landed elsewhere. A failed launch's tab stays to say why. */
   finish(): void
@@ -103,8 +112,10 @@ export function withPlacement(result: AgentLaunchResult, view: AgentLaunchView):
   return placement ? { ...result, placement } : result
 }
 
-function isKnownOperationWithoutPane(params: AgentLaunchParams, context: RpcContext): boolean {
-  if (params.paneKey || !params.operationId || !context.caller) {
+/** The record already holds this operation: whatever it answers (a replay, a conflict, a recorded
+ *  failure), nothing new runs, so no tab is shown for it and no one moves. */
+function isRecordedOperation(params: AgentLaunchParams, context: RpcContext): boolean {
+  if (!params.operationId || !context.caller) {
     return false
   }
   const store = context.runtime.openedAgentSessionRecordStore()
@@ -119,9 +130,7 @@ export function publishEarlyTab(
   params: AgentLaunchParams,
   context: RpcContext
 ): Promise<EarlyAgentLaunchTab | null> {
-  if (isKnownOperationWithoutPane(params, context)) {
-    // A retry naming no pane would get a fresh tab for a request that runs nothing; its answer is
-    // already recorded, so it shows nothing and moves no one.
+  if (isRecordedOperation(params, context)) {
     return Promise.resolve(null)
   }
   return publishAgentLaunchTabEarly(params, context).catch((error: unknown) => {
@@ -190,7 +199,8 @@ export async function publishAgentLaunchTabEarly(
       }),
       ...(params.placement ? { placement: params.placement } : {}),
       viewer: agentLaunchTabViewerRule(context, params.presentation),
-      ...(params.prompt?.text ? { prompt: params.prompt.text } : {})
+      ...(params.prompt?.text ? { prompt: params.prompt.text } : {}),
+      ...(params.operationId ? { operationId: params.operationId } : {})
     })
   } catch (error) {
     running.finish({ tabTakenBack: false })
@@ -206,12 +216,24 @@ export async function publishAgentLaunchTabEarly(
     publishing,
     finishRunning: (tabTakenBack) => running.finish({ tabTakenBack }),
     paneIsLive: () => runtime.hasLiveTerminalForPaneKey(paneKey),
-    // The pane alone: a split the user added while it waited stays theirs.
-    takeBack: () =>
+    closedByUser: () => running.closedByUser(),
+    report: (verdict) =>
       runtime.reportAgentLaunchPaneVerdict(
         { worktreeId: workspace.id, tabId: pane.tabId, leafId: pane.leafId },
-        { kind: 'withdrawn' }
-      )
+        verdict
+      ),
+    // What the record now says for a pane nothing spawned into, so it never stays blank.
+    unspawnedVerdict: () =>
+      runtime.hasLiveTerminalForPaneKey(paneKey)
+        ? { kind: 'proceed' }
+        : agentLaunchPaneVerdictFromRecord(
+            listAgentSessionOperationRowsOwningPane(
+              runtime.openedAgentSessionRecordStore()?.listOperationRows() ?? [],
+              ownedPane,
+              Date.now()
+            ),
+            paneKey
+          )
   })
 }
 
@@ -221,7 +243,9 @@ function trackEarlyAgentLaunchTab(args: {
   publishing: Promise<AgentLaunchTabPublished>
   finishRunning: (tabTakenBack: boolean) => void
   paneIsLive: () => boolean
-  takeBack: () => void
+  closedByUser: () => boolean
+  report: (verdict: AgentLaunchPaneVerdict) => void
+  unspawnedVerdict: () => AgentLaunchPaneVerdict
 }): EarlyAgentLaunchTab {
   let reply: AgentLaunchTabPublished | null = null
   let executing = false
@@ -247,20 +271,21 @@ function trackEarlyAgentLaunchTab(args: {
       ranHere = result.outcome.kind === 'terminal' && result.outcome.paneKey === args.paneKey
     },
     windowShowsTab: () => reply !== null,
+    closedByUser: args.closedByUser,
     finish: () => {
-      const nothingWillRunHere = !executing || ranHere === false
-      if (!nothingWillRunHere) {
+      if (ranHere === true) {
+        // The agent's spawn bound the pane; its own spawn settles the tab.
         args.finishRunning(false)
         return
       }
-      // Only a tab this request made goes, and never one a running agent holds (a replay can
-      // remake a tab whose agent survived).
       void published.then((answer) => {
-        const takeBack = answer?.created === true && !args.paneIsLive()
+        // Only a tab this request made goes, only when nothing will ever run in it, and never one
+        // a running agent holds (a replay can remake a tab whose agent survived).
+        const nothingWillRunHere = !executing || ranHere === false
+        const takeBack = answer?.created === true && nothingWillRunHere && !args.paneIsLive()
         args.finishRunning(takeBack)
-        if (takeBack) {
-          args.takeBack()
-        }
+        // Every shown pane nothing spawned into ends in a verdict: taken back, or what the record says.
+        args.report(takeBack ? { kind: 'withdrawn' } : args.unspawnedVerdict())
       })
     },
     placement: () => reply?.placement

@@ -1,7 +1,18 @@
 import { translate } from '@/i18n/i18n'
-import type { AgentLaunchPaneRefusal } from '../../../../shared/agent-launch-pane-verdict'
+import {
+  parseAgentLaunchPaneRefusal,
+  type AgentLaunchPaneRefusal
+} from '../../../../shared/agent-launch-pane-verdict'
 
 export type ShownAgentLaunchPaneRefusal = Exclude<AgentLaunchPaneRefusal, { kind: 'withdrawn' }>
+
+/** What the pane shows for its error, if it is a launch's; a withdrawn launch closes its tab instead. */
+export function shownAgentLaunchPaneRefusal(
+  error: string | null
+): ShownAgentLaunchPaneRefusal | null {
+  const refusal = error ? parseAgentLaunchPaneRefusal(error) : null
+  return refusal?.kind === 'withdrawn' ? null : refusal
+}
 
 /** The recorded reason in words a user can act on; null when it names nothing they can fix. */
 function notStartedReason(code: string): string | null {

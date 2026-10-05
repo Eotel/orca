@@ -119,7 +119,7 @@ describe('reserveMobileAgentLaunch', () => {
     const { client, sendRequest } = scriptedClient(launched({}))
     await launch(client, {
       placement: { afterTabId: 'tab-current' },
-      mintOperationId: () => '1790000000000-' + 'b'.repeat(32)
+      mintOperationId: () => `1790000000000-${'b'.repeat(32)}`
     })
 
     expect(requestParam(sendRequest.mock.calls[0]![1], 'placement')).toEqual({

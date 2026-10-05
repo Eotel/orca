@@ -13,7 +13,8 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (key: string, fallback: string) => CATALOG[key] ?? fallback
 }))
 
-const { agentLaunchPaneNoticeText } = await import('./agent-launch-pane-notice-text')
+const { agentLaunchPaneNoticeText, shownAgentLaunchPaneRefusal } =
+  await import('./agent-launch-pane-notice-text')
 
 /** The pane's error as it arrives: IPC-wrapped around what main threw. */
 function arrived(refusal: Parameters<typeof formatAgentLaunchPaneRefusal>[0]) {
@@ -46,5 +47,19 @@ describe("the pane of a launch whose agent isn't running", () => {
     expect(agentLaunchPaneNoticeText(arrived({ kind: 'unconfirmed' }))).toBe(
       '无法确认智能体已启动。'
     )
+  })
+})
+
+describe('which surface shows a pane error', () => {
+  it('gives a launch verdict to the notice and everything else to the error toast', () => {
+    const wrapped = (message: string) =>
+      `Error invoking remote method 'pty:spawn': Error: ${message}`
+    expect(shownAgentLaunchPaneRefusal(wrapped('[agent-launch-pane] unconfirmed'))).toEqual({
+      kind: 'unconfirmed'
+    })
+    expect(shownAgentLaunchPaneRefusal(wrapped('spawn zsh ENOENT'))).toBeNull()
+    // A withdrawn launch closes its tab; it is neither notice nor toast.
+    expect(shownAgentLaunchPaneRefusal(wrapped('[agent-launch-pane] withdrawn'))).toBeNull()
+    expect(shownAgentLaunchPaneRefusal(null)).toBeNull()
   })
 })

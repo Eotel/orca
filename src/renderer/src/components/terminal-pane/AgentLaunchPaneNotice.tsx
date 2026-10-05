@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { agentLaunchPanePrompt } from '@/lib/agent-launch-pane-prompt'
+import { createPortal } from 'react-dom'
 import {
   agentLaunchPaneNoticeText,
   type ShownAgentLaunchPaneRefusal
@@ -37,5 +38,27 @@ export function AgentLaunchPaneNotice({
         </Button>
       ) : null}
     </div>
+  )
+}
+
+/** The notice in the active pane, when that pane's error is a launch's. */
+export function AgentLaunchPaneNoticePortal({
+  refusal,
+  isActive,
+  pane,
+  tabId
+}: {
+  refusal: ShownAgentLaunchPaneRefusal | null
+  isActive: boolean
+  pane: { id: number; container: HTMLElement } | null | undefined
+  tabId: string
+}): React.JSX.Element | null {
+  if (!refusal || !isActive || !pane) {
+    return null
+  }
+  return createPortal(
+    <AgentLaunchPaneNotice refusal={refusal} tabId={tabId} />,
+    pane.container,
+    `agent-launch-pane-notice-${pane.id}`
   )
 }

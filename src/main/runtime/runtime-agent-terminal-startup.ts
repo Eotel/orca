@@ -38,6 +38,15 @@ export async function buildRuntimeAgentTerminalStartupOptions(
   }
 
   const startupCwd = resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path
+  const host = await probedThisOrcaLaunchHost({
+    launchPlatform: platform,
+    isRemote,
+    settings,
+    windowsShellOverride: opts.shellOverride,
+    workspacePath: workspace.path,
+    // A caller's own launch file already carries the prompt, so no line needs staging.
+    ...(opts.launchFile ? {} : { prompt: opts.startupPrompt })
+  })
   // A caller that wrote its own launch file already passes the pointer to it as the prompt.
   const planned = await planExecutionHostLaunchPrompt({
     inputs: resolveAgentStartupPlanInputs({
@@ -54,15 +63,7 @@ export async function buildRuntimeAgentTerminalStartupOptions(
     hostIdentity,
     prompt: opts.startupPrompt ?? '',
     ...(opts.launchFile ? { launchFile: opts.launchFile } : {}),
-    host: await probedThisOrcaLaunchHost({
-      launchPlatform: platform,
-      isRemote,
-      settings,
-      windowsShellOverride: opts.shellOverride,
-      workspacePath: workspace.path,
-      // A caller's own launch file already carries the prompt, so no line needs staging.
-      ...(opts.launchFile ? {} : { prompt: opts.startupPrompt })
-    }),
+    host,
     paste:
       opts.startupPromptPaste ?? (opts.onStartupPromptCarry ? 'when-host-proves-agent' : 'never')
   })
@@ -82,12 +83,12 @@ export async function buildRuntimeAgentTerminalStartupOptions(
       break
     case 'on-line':
       startupPlan = planned.plan
-      opts.onStartupPromptCarry?.(true)
+      opts.onStartupPromptCarry?.(true, host)
       break
     case 'launch-file':
       startupPlan = planned.plan
       launchFile = planned.launchFile
-      opts.onStartupPromptCarry?.(true)
+      opts.onStartupPromptCarry?.(true, host)
       break
     case 'paste-after-ready':
       if (!opts.onStartupPromptCarry) {
@@ -95,7 +96,7 @@ export async function buildRuntimeAgentTerminalStartupOptions(
         throw new Error(launchPromptNeedsPasteRefusal(agent, 'terminal'))
       }
       startupPlan = planned.cleanPlan
-      opts.onStartupPromptCarry(false)
+      opts.onStartupPromptCarry(false, host)
       break
   }
 

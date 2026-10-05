@@ -102,7 +102,7 @@ function settleNewTabHostDelivery(
  * (`submit-after-ready`) gets it from the host's proof, never from the tab appearing.
  */
 export function launchNewTabPromptThroughHost(
-  args: Omit<HostAgentLaunchArgs, 'confirmation'> & {
+  args: HostAgentLaunchArgs & {
     promptDelivery: NewTabPromptDelivery
     onPromptDelivered?: () => void
   }
@@ -113,10 +113,7 @@ export function launchNewTabPromptThroughHost(
 } {
   const { promptDelivery, onPromptDelivered, ...launch } = args
   const actsOnResult = promptDelivery === 'submit-after-ready'
-  const { tabId, delivery } = launchAgentThroughHost({
-    ...launch,
-    confirmation: actsOnResult ? 'required' : 'best-effort'
-  })
+  const { tabId, delivery } = launchAgentThroughHost(launch)
   // Why only then: such a prompt is never put in a launch file, whose pointer would be all the
   // agent's transcript shows, so it could never prune this copy.
   const seeded =

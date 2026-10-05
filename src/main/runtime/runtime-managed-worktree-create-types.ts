@@ -1,3 +1,4 @@
+import type { LaunchHost } from '../../shared/launch-host'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type {
@@ -54,7 +55,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupPrompt?: string
   /** Main-internal: set by a caller that delivers an uncarried `startupPrompt` itself (one
    *  `carryLaunchPrompt` leaves for the paste); reports whether the prompt rode the command. */
-  onStartupPromptCarry?: (carried: boolean) => void
+  /** `host`: the launch host's facts the carry was decided by. */
+  onStartupPromptCarry?: (carried: boolean, host?: LaunchHost) => void
   /** Main-internal: the caller's paste for an uncarried `startupPrompt` (`startupPromptPaste` on a
    *  terminal create). */
   startupPromptPaste?: LaunchPromptPaste

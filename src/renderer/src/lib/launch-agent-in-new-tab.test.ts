@@ -272,8 +272,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(hostRequest()?.prompt).toEqual({
       text: 'large generated prompt',
-      delivery: 'submit',
-      confirmation: 'required'
+      delivery: 'submit'
     })
     expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
     expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
@@ -742,7 +741,7 @@ describe('launchAgentInNewTab', () => {
 
     expect(hostRequest()).toMatchObject({
       agentArgs: '--model gpt-5.5',
-      prompt: { text: 'large generated prompt', delivery: 'submit', confirmation: 'required' }
+      prompt: { text: 'large generated prompt', delivery: 'submit' }
     })
   })
 })

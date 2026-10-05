@@ -19,10 +19,7 @@ import {
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 import { createAgentSessionOperationId } from '@/runtime/agent-session-operation-id'
-import {
-  isAgentLaunchResult,
-  type AgentLaunchPromptConfirmation
-} from '../../../shared/agent-launch-intent'
+import { isAgentLaunchResult } from '../../../shared/agent-launch-intent'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { prefersStructuredNativeChatByDefault } from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -36,8 +33,6 @@ export type HostAgentLaunchArgs = {
   groupId?: string
   /** Already trimmed and non-empty. */
   prompt: string
-  /** `required`: the caller acts on the delivery result, so the host must give one it can prove. */
-  confirmation: AgentLaunchPromptConfirmation
   /** Absent uses the settings default; `null` means no arguments. */
   agentArgs?: string | null
   cwd?: string
@@ -102,11 +97,7 @@ function launchParams(args: HostAgentLaunchArgs) {
   return {
     agent: args.agent,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
-    prompt: {
-      text: args.prompt,
-      delivery: 'submit',
-      ...(args.confirmation === 'required' ? { confirmation: 'required' } : {})
-    },
+    prompt: { text: args.prompt, delivery: 'submit' },
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
     ...(args.cwd ? { cwd: args.cwd } : {}),
     ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
@@ -118,15 +109,26 @@ function launchParams(args: HostAgentLaunchArgs) {
 
 /**
  * The ledger is bookkeeping: a desktop past its per-caller row cap still gets its agent, through the
- * host's unrecorded launch, which shows its own tab when the agent spawns.
+ * host's unrecorded launch into the same pane, so the tab stays where it is. That launch shows no tab
+ * early; the host's reveal at spawn hands the pane over (`terminal-presentation-ipc-bridge`).
  */
-async function launchWithoutRecord(args: HostAgentLaunchArgs): Promise<HostAgentLaunchDelivery> {
+async function launchWithoutRecord(
+  args: HostAgentLaunchArgs,
+  pane: { tabId: string; leafId: string; windowMade: boolean }
+): Promise<HostAgentLaunchDelivery> {
   try {
     return deliveryFromResult(
-      await callRuntimeRpc<unknown>({ kind: 'local' }, 'agent.launch', launchParams(args))
+      await callRuntimeRpc<unknown>({ kind: 'local' }, 'agent.launch', {
+        ...launchParams(args),
+        paneKey: makePaneKey(pane.tabId, pane.leafId)
+      })
     )
   } catch (error) {
     const code = error instanceof RuntimeRpcCallError ? error.code : undefined
+    // A pane the host never revealed would open as a shell; one it did holds the agent's terminal.
+    if (pane.windowMade && isAgentLaunchPaneSpawnHeld(pane.tabId, pane.leafId)) {
+      closeLaunchTab(args.worktreeId, pane.tabId)
+    }
     return { kind: 'not-started', unconfirmed: false, ...(code ? { code } : {}) }
   }
 }
@@ -142,10 +144,8 @@ async function settleLaunch(
   } catch (error) {
     const code = error instanceof RuntimeRpcCallError ? error.code : undefined
     if (code === 'agent_session_operation_capacity') {
-      if (pane.windowMade) {
-        closeLaunchTab(args.worktreeId, pane.tabId)
-      }
-      return launchWithoutRecord(args)
+      // Awaited: the pane stays held until the unrecorded launch has its answer.
+      return await launchWithoutRecord(args, pane)
     }
     // The host took the pane once it showed the tab; a window-made pane it never took would open as
     // a shell, and a refused one is the host's to take back.

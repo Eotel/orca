@@ -215,8 +215,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
     expect(hostRequest()?.prompt).toEqual({
       text: prompt,
-      delivery: 'submit',
-      confirmation: 'required'
+      delivery: 'submit'
     })
   })
 

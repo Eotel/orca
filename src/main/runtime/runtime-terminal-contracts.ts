@@ -1,3 +1,4 @@
+import type { LaunchHost } from '../../shared/launch-host'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import type {
   AgentLaunchPreferences,
@@ -57,7 +58,8 @@ export type TerminalCreateOptions = {
    */
   startupPrompt?: string
   /** Main-internal: whether `startupPrompt` rode the launch command. Called once the plan is built. */
-  onStartupPromptCarry?: (carried: boolean) => void
+  /** `host`: the launch host's facts the carry was decided by. */
+  onStartupPromptCarry?: (carried: boolean, host?: LaunchHost) => void
   /** Main-internal: the caller's paste for an uncarried `startupPrompt`; defaults to #24257's guarded
    *  paste when `onStartupPromptCarry` is set. */
   startupPromptPaste?: LaunchPromptPaste

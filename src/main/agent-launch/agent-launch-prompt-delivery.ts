@@ -43,8 +43,7 @@ export function settledAtCreation(
   intent: Pick<AgentLaunchIntent, 'prompt'>,
   created: { promptRodeLaunchCommand?: boolean }
 ): AgentLaunchPromptDisposal {
-  // Under `required` a carried prompt counts only once the agent is seen to have it.
-  if (created.promptRodeLaunchCommand && intent.prompt?.confirmation !== 'required') {
+  if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
   }
   return intent.prompt?.delivery === 'submit' ? UNCONFIRMED : NOT_DELIVERED
@@ -66,23 +65,18 @@ export async function settleLaunchPromptDisposal(
   return deliverTerminalLaunchPrompt(execution, created.outcome.handle, { freshLaunch: true })
 }
 
-/** A caller that acts on the result is told only what the agent was seen to receive. */
+/** A carried prompt is reported by what the host saw become of it (`confirmCarriedTerminalPrompt`). */
 async function confirmCarriedTerminalPrompt(
   execution: AgentLaunchExecution,
   created: CreatedSurface
 ): Promise<AgentLaunchPromptDisposal> {
   const { intent, surfaces } = execution
-  if (
-    intent.prompt?.confirmation !== 'required' ||
-    created.launchStartedAt === undefined ||
-    !surfaces.confirmCarriedTerminalPrompt
-  ) {
+  if (created.launchStartedAt === undefined || !surfaces.confirmCarriedTerminalPrompt) {
     return HANDED_TO_TERMINAL
   }
   return surfaces.confirmCarriedTerminalPrompt({
     handle: created.outcome.handle,
     agent: intent.agent,
-    prompt: intent.prompt,
     launchStartedAt: created.launchStartedAt
   })
 }

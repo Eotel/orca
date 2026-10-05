@@ -88,7 +88,6 @@ function launch() {
     worktreeId: WT,
     groupId: store.getState().activeGroupIdByWorktree[WT],
     prompt: 'fix the failing checks',
-    confirmation: 'required',
     agentArgs: null,
     launchSource: 'source_control_recovery'
   })
@@ -124,7 +123,7 @@ describe('a desktop launch through the host', () => {
     expect(callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'agent.launchReplay', {
       agent: 'claude',
       target: { kind: 'existing', worktree: `id:${WT}` },
-      prompt: { text: 'fix the failing checks', delivery: 'submit', confirmation: 'required' },
+      prompt: { text: 'fix the failing checks', delivery: 'submit' },
       agentArgs: null,
       launchSource: 'source_control_recovery',
       placement: { groupId: store.getState().activeGroupIdByWorktree[WT] },
@@ -227,19 +226,41 @@ describe('a desktop launch through the host', () => {
     expect(launchTab(tabId)).toBeUndefined()
   })
 
-  it('still starts the agent when the launch record is full', async () => {
+  it('still starts the agent in the same tab when the launch record is full', async () => {
+    const unrecorded = deferred<unknown>()
     callRuntimeRpc
       .mockRejectedValueOnce(rpcError('agent_session_operation_capacity'))
-      .mockResolvedValueOnce(terminalResult('other-tab:leaf', 'handed-to-terminal'))
+      .mockReturnValueOnce(unrecorded.promise)
     const { tabId, delivery } = launch()
+    const paneKey = lastPaneKey()
+    await vi.waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(2))
 
-    await expect(delivery).resolves.toEqual({ kind: 'delivered' })
-    // The unrecorded launch shows its own tab when the agent spawns.
-    expect(launchTab(tabId)).toBeUndefined()
     const [, method, params] = callRuntimeRpc.mock.calls[1]!
     expect(method).toBe('agent.launch')
     expect(params).not.toHaveProperty('operationId')
-    expect(params).not.toHaveProperty('paneKey')
+    // The same pane, so the tab neither closes nor reopens, and stays held until the answer.
+    expect(params.paneKey).toBe(paneKey)
+    expect(launchTab(tabId)).toBeDefined()
+    const leafId = launchTab(tabId)!.agentLaunchPane!.leafId
+    expect(agentLaunchPaneSpawnHold(tabId!, leafId)).not.toBeNull()
+
+    unrecorded.resolve(terminalResult(paneKey, 'handed-to-terminal'))
+    await expect(delivery).resolves.toEqual({ kind: 'delivered' })
+    expect(launchTab(tabId)).toBeDefined()
+  })
+
+  it('takes its tab back when the unrecorded launch fails before the host revealed it', async () => {
+    callRuntimeRpc
+      .mockRejectedValueOnce(rpcError('agent_session_operation_capacity'))
+      .mockRejectedValueOnce(rpcError('worktree_not_found'))
+    const { tabId, delivery } = launch()
+
+    await expect(delivery).resolves.toEqual({
+      kind: 'not-started',
+      unconfirmed: false,
+      code: 'worktree_not_found'
+    })
+    expect(launchTab(tabId)).toBeUndefined()
   })
 
   describe('when chat is the default', () => {

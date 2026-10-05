@@ -357,7 +357,6 @@ async function createTerminalSurface(
     worktreeId,
     agent: intent.agent,
     ...(startupPrompt ? { startupPrompt } : {}),
-    ...(intent.prompt?.confirmation ? { promptConfirmation: intent.prompt.confirmation } : {}),
     ...terminalLaunchInputs(intent),
     viewMode: deriveAgentLaunchTerminalViewMode({
       settings: readAgentLaunchModeSettings(execution.runtime),

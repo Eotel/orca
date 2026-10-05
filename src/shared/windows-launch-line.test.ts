@@ -32,13 +32,16 @@ const PROMPTS = {
 
 type Row = keyof typeof PROMPTS
 
-function windowsHost(windowsPowerShell: WindowsPowerShell | null) {
+/** The pane the quoting shell implies: cmd's own, Git Bash's for POSIX quoting, and PowerShell's
+ *  as this Orca knows it (null until its pwsh.exe probe answers). */
+function windowsHost(windowsPowerShell: WindowsPowerShell | null, shell: AgentStartupShell) {
   return describeLaunchHost({
     launchPlatform: 'win32',
     isRemote: false,
     hostPlatform: 'win32',
     paired: false,
-    windowsPaneShell: windowsPowerShell
+    windowsPaneShell:
+      shell === 'cmd' ? 'cmd.exe' : shell === 'posix' ? 'git-bash' : windowsPowerShell
   })
 }
 
@@ -55,21 +58,22 @@ function carry(
     cmdOverrides: { [agent]: command },
     platform: 'win32',
     shell,
-    host: windowsHost(windowsPowerShell),
+    host: windowsHost(windowsPowerShell, shell),
     paste: 'when-host-proves-agent'
   })?.carry
 }
 
-// Each row: what main's typed line did, then the carry it gets. A launch file only where main's
-// line was measured to damage or lose the prompt; everywhere else the line, as main typed it.
+// Each row: what main's typed line did, then the carry it gets. Where main's line was measured to
+// damage or lose the prompt, a cmd pane (its shell provable alone) pastes it once the agent runs, and
+// Git Bash, or a PowerShell not yet known, gets a launch file; everywhere else the line.
 describe('an agent.launch prompt on a Windows host, per measured shell', () => {
-  it.each<[AgentStartupShell, Row, string, 'on-line' | 'launch-file']>([
+  it.each<[AgentStartupShell, Row, string, 'on-line' | 'launch-file' | 'paste-after-ready']>([
     ['cmd', 'p2k', 'exact', 'on-line'],
-    ['cmd', 'p20k', 'input line too long', 'launch-file'],
-    ['cmd', 'ml5', 'damaged', 'launch-file'],
-    ['cmd', 'ml9k', 'input line too long', 'launch-file'],
+    ['cmd', 'p20k', 'input line too long', 'paste-after-ready'],
+    ['cmd', 'ml5', 'damaged', 'paste-after-ready'],
+    ['cmd', 'ml9k', 'input line too long', 'paste-after-ready'],
     ['cmd', 'e8100', 'exact', 'on-line'],
-    ['cmd', 'e8191', 'input line too long', 'launch-file'],
+    ['cmd', 'e8191', 'input line too long', 'paste-after-ready'],
     ['cmd', 'pq', 'damaged by main’s quoting, exact on this line', 'on-line'],
     ['cmd', 'ppct', 'damaged by main’s quoting, exact on this line', 'on-line'],
     ['cmd', 'pbs', 'damaged by main’s quoting, exact on this line', 'on-line'],
@@ -96,17 +100,17 @@ describe('an agent.launch prompt on a Windows host, per measured shell', () => {
   })
 
   // Why: this Orca spawns the pane, so it knows which PowerShell gets the line. 5.1's measured
-  // damage gets a launch file, better than main; 7 keeps the line it carried exactly.
-  it.each<[Row, WindowsPowerShell, string, 'on-line' | 'launch-file']>([
-    ['pq', 'powershell.exe', 'damaged on 5.1', 'launch-file'],
-    ['pbs', 'powershell.exe', 'damaged on 5.1', 'launch-file'],
+  // damage is pasted once the agent runs (its shell provable alone); 7 keeps the line it carried.
+  it.each<[Row, WindowsPowerShell, string, 'on-line' | 'launch-file' | 'paste-after-ready']>([
+    ['pq', 'powershell.exe', 'damaged on 5.1', 'paste-after-ready'],
+    ['pbs', 'powershell.exe', 'damaged on 5.1', 'paste-after-ready'],
     ['ppct', 'powershell.exe', 'exact on 5.1', 'on-line'],
     ['ml5', 'powershell.exe', 'exact on 5.1', 'on-line'],
     ['p20k', 'powershell.exe', 'exact on 5.1', 'on-line'],
     ['pq', 'pwsh.exe', 'exact on 7', 'on-line'],
     ['pbs', 'pwsh.exe', 'exact on 7', 'on-line'],
     ['ppct', 'pwsh.exe', 'exact on 7', 'on-line'],
-    ['ml9k', 'pwsh.exe', 'lines run as commands on 7', 'launch-file']
+    ['ml9k', 'pwsh.exe', 'lines run as commands on 7', 'paste-after-ready']
   ])('powershell %s spawned as %s (main: %s) rides %s', (row, ps, _main, expected) => {
     const command = (agent: TuiAgent) =>
       `node C:/Users/neil/orca-qa/stack-final/win/bin/stub.js --qa-as=${agent}`
@@ -135,9 +139,9 @@ describe('an agent.launch prompt on a Windows host, per measured shell', () => {
 
   // Why per shell (stack QA ptab/pcr): cmd and Git Bash read a Tab or carriage return as a key
   // (completion, or Enter, which in cmd runs the rest as commands); both PowerShells carried them.
-  it.each<[AgentStartupShell, 'ptab' | 'pcr', 'on-line' | 'launch-file']>([
-    ['cmd', 'ptab', 'launch-file'],
-    ['cmd', 'pcr', 'launch-file'],
+  it.each<[AgentStartupShell, 'ptab' | 'pcr', 'on-line' | 'launch-file' | 'paste-after-ready']>([
+    ['cmd', 'ptab', 'paste-after-ready'],
+    ['cmd', 'pcr', 'paste-after-ready'],
     ['posix', 'ptab', 'launch-file'],
     ['posix', 'pcr', 'launch-file'],
     ['powershell', 'ptab', 'on-line'],
@@ -154,7 +158,7 @@ describe('an agent.launch prompt on a Windows host, per measured shell', () => {
         cmdOverrides: {},
         platform: 'win32',
         shell,
-        host: windowsHost(windowsPowerShell),
+        host: windowsHost(windowsPowerShell, shell),
         paste: 'when-host-proves-agent'
       })
       expect(planned?.carry).toBe(expected)
@@ -171,7 +175,7 @@ describe('an agent.launch prompt on a Windows host, per measured shell', () => {
         cmdOverrides: {},
         platform: 'win32',
         shell,
-        host: windowsHost('pwsh.exe'),
+        host: windowsHost('pwsh.exe', shell),
         paste
       })?.carry
     expect(planned('cmd', 'never')).toBe('on-line')
@@ -184,19 +188,24 @@ describe('an agent.launch prompt on a Windows host, per measured shell', () => {
     )
   })
 
-  it('leaves another control byte, never measured, to main’s delivery', () => {
-    const planned = (paste: 'once-agent-runs' | 'when-host-proves-agent') =>
+  it('pastes another control byte, never measured, where the shell is provable alone', () => {
+    const planned = (
+      paste: 'once-agent-runs' | 'when-host-proves-agent',
+      pane: WindowsPowerShell | null
+    ) =>
       planLaunchPrompt({
         agent: 'claude',
         prompt: 'before\x1bafter',
         cmdOverrides: {},
         platform: 'win32',
         shell: 'powershell',
-        host: windowsHost('pwsh.exe'),
+        host: windowsHost(pane, 'powershell'),
         paste
       })?.carry
-    expect(planned('once-agent-runs')).toBe('paste-after-ready')
-    expect(planned('when-host-proves-agent')).toBe('on-line')
+    expect(planned('once-agent-runs', 'pwsh.exe')).toBe('paste-after-ready')
+    expect(planned('when-host-proves-agent', 'pwsh.exe')).toBe('paste-after-ready')
+    // A PowerShell this Orca cannot name yet proves nothing, so main's typed line stays.
+    expect(planned('when-host-proves-agent', null)).toBe('on-line')
   })
 
   // Why: an AI button's prompt was pasted on main, which ran the action on that paste. A Windows

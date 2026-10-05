@@ -31,9 +31,7 @@ export type AgentLaunchFingerprintInput = {
   target:
     | { kind: 'existing'; worktree: string }
     | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
-  /** `confirmation: 'required'` is in: it changes how the prompt travels (a paste where a line would
-   *  carry it), so a retry that dropped it is a different operation. `best-effort` is its absence. */
-  prompt?: { text: string; delivery: string; confirmation?: string }
+  prompt?: { text: string; delivery: string }
   sessionOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }
   /** In: a launch carrying `--model opus` is a different operation from one without, so a retry
@@ -69,12 +67,7 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     method: 'agent.launch',
     agent: input.agent,
     target: input.target,
-    prompt: input.prompt && {
-      text: input.prompt.text,
-      delivery: input.prompt.delivery,
-      // Spelled out so an explicit `best-effort` digests like its absence, as every row before it did.
-      ...(input.prompt.confirmation === 'required' ? { confirmation: 'required' } : {})
-    },
+    prompt: input.prompt,
     sessionOptions: input.sessionOptions,
     reuseTerminal: input.reuseTerminal,
     agentArgs: input.agentArgs,

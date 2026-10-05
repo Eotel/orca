@@ -5,6 +5,7 @@
  * that diverges between them would let one file prove something the other's launch never does.
  */
 
+import type { LaunchHost } from '../../../../shared/launch-host'
 import { vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch-pane-already-live'
@@ -44,6 +45,8 @@ export type AgentLaunchRuntimeStubOptions = {
   /** Whether the runtime reports an offered prompt carried; unset reports it carried, as for an
    *  agent that reads its launch file. */
   lineCarriesPrompt?: boolean
+  /** The host facts the carry was decided by; unset is a local macOS host. */
+  launchHost?: LaunchHost
   /** Panes this runtime found already running, by the handle it issued them: a restarted host
    *  that could not re-adopt a surviving PTY's handle issues a new one for the same pane. */
   adoptedPanes?: Record<string, string>
@@ -59,7 +62,15 @@ function reportPromptCarry(
   offered: unknown
 ): void {
   if (typeof report === 'function' && offered) {
-    report(options.lineCarriesPrompt ?? true)
+    report(
+      options.lineCarriesPrompt ?? true,
+      options.launchHost ?? {
+        paired: false,
+        provesAgentInFront: true,
+        takesLaunchFile: true,
+        windowsPaneShell: null
+      }
+    )
   }
 }
 

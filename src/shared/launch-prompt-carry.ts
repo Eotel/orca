@@ -14,7 +14,7 @@ import {
 } from './tui-agent-startup-shell'
 import { typedStartupLineFits } from './typed-startup-line'
 import type { TuiAgent } from './tui-agent'
-import type { LaunchHost } from './launch-host'
+import { provesShellInFront, type LaunchHost } from './launch-host'
 import { windowsLaunchLineVerdict } from './windows-launch-line'
 
 /** Why a prefill draft could not be launched, in the user's words: on a Windows host the only
@@ -133,17 +133,20 @@ export function carryLaunchPrompt<A extends CarriedPlanArgs, P extends { launchC
     plan,
     ...(args.paste === 'once-agent-runs' ? { unstageableLine: 'refuse' as const } : {})
   })
+  // Why a proven-alone shell: the guarded paste is refused only by a shell in front, so on a cmd or
+  // PowerShell pane it never types into one (QA: their startup-crash rows typed nothing).
   const pasteReachesAgent =
     args.paste === 'once-agent-runs' ||
-    (args.paste === 'when-host-proves-agent' && args.host.provesAgentInFront)
+    (args.paste === 'when-host-proves-agent' && provesShellInFront(args.host))
   const lineOrPaste = (): LaunchPromptPlan<P> | null => {
     const plan = pasteReachesAgent ? null : buildLine(args)
     return plan ? onLine(plan) : pasteAfterReady()
   }
   const viaLaunchFile = (): LaunchPromptPlan<P> | null => {
-    // Why paste first: main pastes this caller's prompts, so the agent gets the user's text; a
-    // pointer replaces only a line main would have typed damaged or cut.
-    if (args.paste === 'once-agent-runs') {
+    // Why paste first: the agent gets the user's text. On a Windows cmd or PowerShell pane that is
+    // the measured-safe path (main's button paste); past the POSIX argv ceiling a file is what was
+    // measured (112 KB read without asking), and no paste of that size was.
+    if (args.paste === 'once-agent-runs' || (!args.host.provesAgentInFront && pasteReachesAgent)) {
       return pasteAfterReady()
     }
     // Why: an agent not measured reading the file would stop on an approval or refuse the path.
@@ -188,8 +191,8 @@ export function carryLaunchPrompt<A extends CarriedPlanArgs, P extends { launchC
   if (windowsLine === 'damaged' || (typesRaw && !typedStartupLineFits(plan.launchCommand))) {
     return viaLaunchFile()
   }
-  // Why: unmeasured, so this path does what main does: its paste, or the line it typed.
-  if (windowsLine === 'uncertain' && args.paste === 'once-agent-runs') {
+  // Why: never measured exact, so where a paste reaches the agent it carries the real text instead.
+  if (windowsLine === 'uncertain' && pasteReachesAgent) {
     return pasteAfterReady()
   }
   return onLine(plan)

@@ -197,7 +197,12 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
 
   function carryBrief(carried: boolean): void {
     vi.spyOn(runtime, 'createTerminal').mockImplementation(async (_selector, options) => {
-      options?.onStartupPromptCarry?.(carried)
+      options?.onStartupPromptCarry?.(carried, {
+        paired: false,
+        provesAgentInFront: true,
+        takesLaunchFile: true,
+        windowsPaneShell: null
+      })
       return { handle: 'term_worker', worktreeId: 'repo::worktree', title: 'worker' }
     })
   }

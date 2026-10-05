@@ -24,8 +24,6 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import type { AgentLaunchPromptDisposal } from '../../../../shared/agent-launch-intent'
-import type { LaunchTurnStartVerdict } from '../../launch-turn-start-observation'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
 import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
@@ -47,8 +45,6 @@ const BLOCKED_RECHECK_MS = 1_000
 type TerminalPromptRuntime = LaunchedAgentReadinessRuntime &
   LaunchedAgentWriteGuardRuntime &
   Pick<OrcaRuntimeService, 'sendTerminalAgentPrompt'>
-
-type CarriedPromptRuntime = Pick<OrcaRuntimeService, 'observeTerminalLaunchTurnStart'>
 
 type ReadinessClock = { now: () => number; sleep: (ms: number) => Promise<void> }
 
@@ -162,41 +158,5 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
     return false
   } finally {
     guard.dispose()
-  }
-}
-
-/**
- * Whether the agent received the prompt its launch command carried, for a caller that acts on the
- * answer: the agent proven running with it (or its hook turn, if that comes first) proves it; an
- * exit at startup refutes it; anything else is unconfirmed, never "not delivered", since the agent
- * may still run it. Worker start reads the same observation for a carried brief.
- */
-export async function confirmCarriedTerminalAgentLaunchPrompt(args: {
-  runtime: CarriedPromptRuntime
-  handle: string
-  agent: TuiAgent
-  launchStartedAt: number
-}): Promise<AgentLaunchPromptDisposal> {
-  let verdict: LaunchTurnStartVerdict
-  try {
-    verdict = await args.runtime.observeTerminalLaunchTurnStart(
-      args.handle,
-      // As main ran the follow-up once its paste reached the agent: the agent proven running with
-      // the prompt on its command line counts; its hook turn only gets there first.
-      { launchStartedAt: args.launchStartedAt, agent: args.agent, agentInFrontSuffices: true },
-      AGENT_READY_TIMEOUT_MS
-    )
-  } catch {
-    return { outcome: 'unconfirmed' }
-  }
-  switch (verdict) {
-    case 'observed':
-    case 'permission':
-    case 'unsupported':
-      return { outcome: 'handed-to-terminal' }
-    case 'exited':
-      return { outcome: 'not-delivered', reason: 'agent-exited' }
-    case 'unobserved':
-      return { outcome: 'unconfirmed' }
   }
 }

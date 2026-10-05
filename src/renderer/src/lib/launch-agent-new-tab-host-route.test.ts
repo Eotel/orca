@@ -68,13 +68,6 @@ describe('which new-tab prompts the host delivers', () => {
 })
 
 describe('a new-tab prompt the host delivers', () => {
-  it('asks for a result the host can prove only when the caller acts on it', () => {
-    launch({ kind: 'delivered' })
-    expect(launchAgentThroughHost.mock.calls[0]?.[0]).toMatchObject({ confirmation: 'required' })
-    launch({ kind: 'delivered' }, 'auto-submit')
-    expect(launchAgentThroughHost.mock.calls[1]?.[0]).toMatchObject({ confirmation: 'best-effort' })
-  })
-
   it('runs the follow-up only on a delivered prompt', async () => {
     const onPromptDelivered = vi.fn()
     await expect(

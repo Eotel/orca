@@ -23,20 +23,9 @@ export type AgentLaunchPromptDelivery =
    *  directly, so it no longer decides the route. */
   | 'draft'
 
-/**
- * What the caller does with the delivery result. `required`: a follow-up acts on it (resolving review
- * threads, posting replies, marking notes sent), so the host must give a result it can prove, as
- * the desktop's paste once the agent runs did; a carried prompt counts only once the agent is seen
- * to have it. `best-effort` (the default): the result is only reported. The caller states intent;
- * how the prompt travels stays the host's.
- */
-export type AgentLaunchPromptConfirmation = 'required' | 'best-effort'
-
 export type AgentLaunchPrompt = {
   text: string
   delivery: AgentLaunchPromptDelivery
-  /** Absent is `best-effort`. */
-  confirmation?: AgentLaunchPromptConfirmation
 }
 
 /**
@@ -176,22 +165,30 @@ export type AgentLaunchPromptDisposal =
   /** Committed to the session's transcript, which `messageId` names. */
   | { outcome: 'journaled'; messageId: string }
   /**
-   * Handed to a terminal agent, either on the launch command that started it or as a bracketed
-   * paste into its live PTY. No `messageId`, because a terminal keeps no transcript to name a row
-   * in: what the agent does with the text is observable only in the pane. The caller must NOT
-   * resend — a second paste arrives as a second turn, which is worse than the wasted resend
-   * `not-delivered` costs.
+   * Handed to a terminal agent, on the launch command that started it or as a bracketed paste into
+   * its live PTY. No `messageId`: a terminal keeps no transcript to name a row in. The caller must
+   * NOT resend; a second paste is a second turn. What it rests on depends on the host and caller:
+   *
+   *   pasted, the agent proven in front (macOS, Linux, SSH to them)       -> handed-to-terminal
+   *   pasted on a Windows cmd or PowerShell pane, no shell in front       -> handed-to-terminal
+   *   on the line, a caller that reads `unconfirmed`, a host that can see
+   *     the agent: once it is in front and ready, or its hook turn        -> handed-to-terminal
+   *   on the line, a Windows host (it can never see the agent in front)   -> handed-to-terminal
+   *   on the line, a caller that cannot read `unconfirmed`                 -> handed-to-terminal
+   *   the agent exited before it read the line, or a paste found no agent -> not-delivered
+   *   no proof within the budget, or the host stopped mid-delivery       -> unconfirmed
    */
   | { outcome: 'handed-to-terminal' }
-  /** Not delivered by this call; the caller still owns the text. `agent-exited`: the agent had it on
-   *  its command line and exited at startup before reading it (reported only under `required`). */
-  | { outcome: 'not-delivered'; reason?: 'agent-exited' }
+  /** Not delivered by this call; the caller still owns the text. `reason`, when present, says why;
+   *  `agent-exited` is the agent exiting at startup before it read a prompt on its command line. A
+   *  reason this build does not know still reads as not delivered. */
+  | { outcome: 'not-delivered'; reason?: string }
   /**
    * The text may or may not have arrived, so the caller must not resend. Replayed when the host
-   * recorded the running agent and stopped before the delivery reported back; live only under
-   * `confirmation: 'required'`, when nothing proved the agent received a carried prompt. Sent only to
-   * a caller advertising `agent.launch.prompt-unconfirmed.v1`; a replay to any other caller is
-   * refused with `agent_session_operation_unknown` instead.
+   * recorded the running agent and stopped before the delivery reported back; live when a host that
+   * can see the agent found no proof a carried prompt arrived. Sent only to a caller advertising
+   * `agent.launch.prompt-unconfirmed.v1`; a replay to any other caller is refused with
+   * `agent_session_operation_unknown` instead.
    */
   | { outcome: 'unconfirmed' }
 
@@ -300,7 +297,7 @@ function isAgentLaunchPromptReceipt(value: unknown): value is AgentLaunchPromptR
   return value.outcome === 'journaled'
     ? 'messageId' in value && typeof value.messageId === 'string'
     : value.outcome === 'not-delivered'
-      ? !('reason' in value) || value.reason === undefined || value.reason === 'agent-exited'
+      ? !('reason' in value) || value.reason === undefined || typeof value.reason === 'string'
       : value.outcome === 'handed-to-terminal' || value.outcome === 'unconfirmed'
 }
 

@@ -74,16 +74,8 @@ function launchesThroughHost(args: AgentLaunchCallerProfile['args']): boolean {
 }
 
 /** A prompt the host delivers: one request, nothing the window types or pastes itself. */
-function expectHandedToHost(
-  promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready' | undefined,
-  prompt: string
-): void {
-  expect(hostLaunchRequest(callRuntimeRpc)?.prompt).toEqual({
-    text: prompt,
-    delivery: 'submit',
-    // Only a caller that acts on the result asks for one the host can prove.
-    ...(promptDelivery === 'submit-after-ready' ? { confirmation: 'required' } : {})
-  })
+function expectHandedToHost(prompt: string): void {
+  expect(hostLaunchRequest(callRuntimeRpc)?.prompt).toEqual({ text: prompt, delivery: 'submit' })
   expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
   expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
 }
@@ -189,7 +181,7 @@ describe('agent launch caller prompt transport', () => {
       }
       if (launchesThroughHost(profile.args)) {
         expect(result?.pasteDraftAfterLaunch).toBe(false)
-        expectHandedToHost(profile.args.promptDelivery, PROMPT)
+        expectHandedToHost(PROMPT)
         return
       }
       // Codex cannot prefill a draft, so the window pastes it once the agent is ready.
@@ -248,7 +240,7 @@ describe('agent launch caller prompt transport', () => {
     expect(result?.pasteDraftAfterLaunch).toBe(row.transport === 'paste')
     if (row.transport === 'host') {
       expect(row.submits).toBe(true)
-      expectHandedToHost(row.promptDelivery === 'draft' ? undefined : row.promptDelivery, PROMPT)
+      expectHandedToHost(PROMPT)
       return
     }
     expect(queuedStartupCommand(store)?.includes(PROMPT)).toBe(row.transport === 'argv')
@@ -263,8 +255,8 @@ describe('agent launch caller prompt transport', () => {
   })
 
   // Main pasted an AI button's prompt once the agent ran, whatever its size or host; the host's one
-  // rule now picks the transport for that caller (confirmation `required`), and the window keeps
-  // no copy of it: no line, launch file or unstageable-line wish of its own.
+  // rule now picks the transport from its own facts, and the window keeps no copy of it: no line,
+  // launch file or unstageable-line wish of its own.
   it.each([
     ['a prompt past the argv ceiling', 'claude', 'x'.repeat(100_001), 'darwin'],
     ['a Windows prompt', 'gemini', 'say "hi"', 'win32'],
@@ -288,7 +280,7 @@ describe('agent launch caller prompt transport', () => {
         delivered: true,
         failureNotified: false
       })
-      expectHandedToHost('submit-after-ready', prompt)
+      expectHandedToHost(prompt)
     }
   )
 

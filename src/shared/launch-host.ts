@@ -35,6 +35,21 @@ export type LaunchHost = {
 }
 
 /**
+ * Whether a shell back in front of a pane can be proven alone, so a paste refused only by that proof
+ * never types into it: always where the agent itself can be proven (macOS, Linux, SSH to them), and
+ * on a local Windows cmd or PowerShell pane (its job holds only the shell then). A Git Bash or WSL
+ * pane keeps other processes in the shell's job, so nothing there proves the shell alone.
+ */
+export function provesShellInFront(host: LaunchHost): boolean {
+  return (
+    host.provesAgentInFront ||
+    host.windowsPaneShell === 'cmd.exe' ||
+    host.windowsPaneShell === 'powershell.exe' ||
+    host.windowsPaneShell === 'pwsh.exe'
+  )
+}
+
+/**
  * The shell this host spawns for a local Windows pane, resolved as the spawn resolves it: the
  * requested shell, then the setting; for PowerShell, the implementation setting, then whether
  * pwsh.exe is installed. Null for a shell it cannot name (a custom path, or `bash.exe`, which may be

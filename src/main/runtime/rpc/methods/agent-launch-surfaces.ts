@@ -28,12 +28,12 @@ import { structuredCallerFor } from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 import { commitStructuredAgentSessionLaunchPrompt } from './agent-launch-structured-prompt'
 import {
-  confirmCarriedTerminalAgentLaunchPrompt,
   deliverTerminalAgentLaunchPrompt
 } from './agent-launch-terminal-prompt'
 import { readsUnconfirmedLaunchPrompt } from './agent-launch-replay'
+import { proveCarriedTerminalAgentLaunchPrompt } from './agent-launch-carried-prompt-proof'
 import { HANDED_TO_TERMINAL } from '../../../agent-launch/agent-launch-prompt-delivery'
-import type { AgentLaunchPromptConfirmation } from '../../../../shared/agent-launch-intent'
+import { provesShellInFront, type LaunchHost } from '../../../../shared/launch-host'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
 import { createStructuredAgentSessionId } from '../../../../shared/structured-agent-session-create'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
@@ -57,9 +57,8 @@ export function agentLaunchSurfaceFactory(
   // close can both land after admission.
   earlyTab: Pick<EarlyAgentLaunchTab, 'windowShowsTab' | 'closedByUser'> | null = null
 ): AgentLaunchSurfaceFactory {
-  // Only a caller that reads `unconfirmed` can be told a carried prompt was not proven.
-  const confirmsPrompt = (confirmation: AgentLaunchPromptConfirmation | undefined): boolean =>
-    confirmation === 'required' && readsUnconfirmedLaunchPrompt(context)
+  // The facts each terminal's prompt was carried by, so its paste and its receipt read the same host.
+  const launchHostByHandle = new Map<string, LaunchHost>()
   return {
     createStructuredSession: async ({
       worktreeId,
@@ -128,7 +127,6 @@ export function agentLaunchSurfaceFactory(
       worktreeId,
       agent,
       startupPrompt,
-      promptConfirmation,
       agentArgs,
       cwd,
       launchSource,
@@ -138,6 +136,7 @@ export function agentLaunchSurfaceFactory(
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
       let promptRodeLaunchCommand = false
+      let launchHost: LaunchHost | null = null
       if (earlyTab?.closedByUser()) {
         // The user closed its tab while it waited: nothing is spawned, and that is the answer.
         terminalSpawn.rethrow(new AgentLaunchTabClosedError())
@@ -152,12 +151,9 @@ export function agentLaunchSurfaceFactory(
         ...(startupPrompt
           ? {
               startupPrompt,
-              // Main pasted such a prompt once the agent ran, on every host.
-              ...(confirmsPrompt(promptConfirmation)
-                ? { startupPromptPaste: 'once-agent-runs' as const }
-                : {}),
-              onStartupPromptCarry: (carried: boolean) => {
+              onStartupPromptCarry: (carried: boolean, host?: LaunchHost) => {
                 promptRodeLaunchCommand = carried
+                launchHost = host ?? null
               }
             }
           : {}),
@@ -173,6 +169,9 @@ export function agentLaunchSurfaceFactory(
         onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
       })
       const terminal = await created.catch(terminalSpawn.rethrow)
+      if (launchHost) {
+        launchHostByHandle.set(terminal.handle, launchHost)
+      }
       return {
         handle: terminal.handle,
         // The runtime already minted this pane and baked it into the PTY's env and its own reveal;
@@ -191,14 +190,16 @@ export function agentLaunchSurfaceFactory(
         agent,
         freshLaunch,
         text: prompt.text,
-        // As main's paste once the agent runs: only a shell proven in front refuses it.
-        ...(confirmsPrompt(prompt.confirmation)
-          ? { unprovableHost: 'write-unless-shell' as const }
-          : {})
+        // A Windows cmd or PowerShell pane can prove its shell alone, so only that refuses the paste.
+        unprovableHost: windowsPaneProvesShell(launchHostByHandle.get(handle))
+          ? 'write-unless-shell'
+          : 'refuse'
       }),
-    confirmCarriedTerminalPrompt: async ({ handle, agent, prompt, launchStartedAt }) =>
-      confirmsPrompt(prompt.confirmation)
-        ? confirmCarriedTerminalAgentLaunchPrompt({
+    confirmCarriedTerminalPrompt: async ({ handle, agent, launchStartedAt }) =>
+      // A caller that reads `unconfirmed` waits for proof where the host can give it; one that cannot
+      // read it, or a host that cannot see the agent (Windows), gets the prompt as handed over.
+      readsUnconfirmedLaunchPrompt(context) && launchHostByHandle.get(handle)?.provesAgentInFront
+        ? proveCarriedTerminalAgentLaunchPrompt({
             runtime: context.runtime,
             handle,
             agent,
@@ -206,6 +207,12 @@ export function agentLaunchSurfaceFactory(
           })
         : HANDED_TO_TERMINAL
   }
+}
+
+/** A Windows pane whose shell alone in front can be proven (cmd, PowerShell); never a POSIX one,
+ *  whose paste needs the agent itself proven. */
+function windowsPaneProvesShell(host: LaunchHost | undefined): boolean {
+  return host !== undefined && !host.provesAgentInFront && provesShellInFront(host)
 }
 
 function requireInstalledHost(): StructuredAgentSessionHost {

@@ -5,13 +5,16 @@
  * Session-only and store-free, so the store's close path can note it without an import cycle.
  */
 
-import { makePaneKey } from '../../../shared/stable-pane-id'
-
 const MAX_REMEMBERED_CLOSES = 32
 const closedPaneKeys = new Set<string>()
 
+// Not `makePaneKey`: that validates the leaf id, and a reveal must never fail over bookkeeping.
+function closeKey(tabId: string, leafId: string): string {
+  return JSON.stringify([tabId, leafId])
+}
+
 export function noteAgentLaunchPaneClosedByUser(tabId: string, leafId: string): void {
-  const paneKey = makePaneKey(tabId, leafId)
+  const paneKey = closeKey(tabId, leafId)
   closedPaneKeys.delete(paneKey)
   closedPaneKeys.add(paneKey)
   for (const oldest of closedPaneKeys) {
@@ -23,5 +26,5 @@ export function noteAgentLaunchPaneClosedByUser(tabId: string, leafId: string): 
 }
 
 export function wasAgentLaunchPaneClosedByUser(tabId: string, leafId: string): boolean {
-  return closedPaneKeys.has(makePaneKey(tabId, leafId))
+  return closedPaneKeys.has(closeKey(tabId, leafId))
 }

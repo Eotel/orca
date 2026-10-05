@@ -5,6 +5,7 @@ import type {
   AgentLaunchTabPublishReply,
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch-tab-publication'
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type {
@@ -170,7 +171,6 @@ export type UiCommandEventApi = {
       focus?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
-      launchTabShown?: true
       tabId?: string
       leafId?: string
       splitFromLeafId?: string
@@ -187,6 +187,7 @@ export type UiCommandEventApi = {
   replyTerminalCreate: (reply: TerminalTabCreateReply) => void
   onPublishAgentLaunchTab: (callback: (data: AgentLaunchTabPublishRequest) => void) => () => void
   replyAgentLaunchTabPublish: (reply: AgentLaunchTabPublishReply) => void
+  onAgentLaunchPaneVerdict: (callback: (data: AgentLaunchPaneVerdictEvent) => void) => () => void
   onSplitTerminal: (
     callback: (data: {
       tabId: string

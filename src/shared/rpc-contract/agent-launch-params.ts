@@ -131,11 +131,11 @@ export const AgentLaunchFields = z.object({
    *  the caller, so a paired device moves only its own selection. Outside the fingerprint for the
    *  same reason as `placement`, and open like it: a word this host does not know reads as absent. */
   presentation: z
-    .string()
-    .optional()
+    .unknown()
     .transform((value): 'focused' | 'background' | undefined =>
       value === 'focused' || value === 'background' ? value : undefined
     )
+    .optional()
 })
 
 /** A caller-minted session id must be shaped like every id the host mints, so an id still names

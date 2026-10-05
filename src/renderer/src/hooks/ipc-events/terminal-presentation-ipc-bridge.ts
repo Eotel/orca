@@ -10,6 +10,7 @@ import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mod
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { tryMakePaneKey } from './agent-status-routing'
+import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { useAppStore } from '../../store'
 import {
   activateExistingLeafInLayout,
@@ -39,7 +40,6 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         focus,
         presentation,
         surfaceOwner,
-        launchTabShown,
         tabId,
         leafId,
         splitFromLeafId,
@@ -59,7 +59,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             activateTerminalInitiatedWorktree(store, worktreeId)
           }
           const worktreeTabs = store.tabsByWorktree[worktreeId] ?? []
-          if (launchTabShown && ptyId && tabId && !worktreeTabs.some((t) => t.id === tabId)) {
+          if (ptyId && tabId && leafId && wasAgentLaunchPaneClosedByUser(tabId, leafId)) {
             // The user closed the launch's tab while it waited. That close wins: the tab stays
             // closed, and its agent stops, as closing any tab stops what runs in it.
             void window.api.pty.kill(ptyId)

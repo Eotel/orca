@@ -2,10 +2,8 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { agentLaunchPanePrompt } from '@/lib/agent-launch-pane-prompt'
 import { createPortal } from 'react-dom'
-import {
-  agentLaunchPaneNoticeText,
-  type ShownAgentLaunchPaneRefusal
-} from './agent-launch-pane-notice-text'
+import type { AgentLaunchPaneOutcome } from '../../../../shared/agent-launch-pane-verdict'
+import { agentLaunchPaneNoticeText } from './agent-launch-pane-notice-text'
 
 /**
  * What a pane an agent launch laid out shows when its agent is not running in it. Not dismissable:
@@ -15,7 +13,7 @@ export function AgentLaunchPaneNotice({
   refusal,
   tabId
 }: {
-  refusal: ShownAgentLaunchPaneRefusal
+  refusal: AgentLaunchPaneOutcome
   tabId: string
 }): React.JSX.Element {
   const prompt = agentLaunchPanePrompt(tabId)
@@ -48,7 +46,7 @@ export function AgentLaunchPaneNoticePortal({
   pane,
   tabId
 }: {
-  refusal: ShownAgentLaunchPaneRefusal | null
+  refusal: AgentLaunchPaneOutcome | null
   isActive: boolean
   pane: { id: number; container: HTMLElement } | null | undefined
   tabId: string

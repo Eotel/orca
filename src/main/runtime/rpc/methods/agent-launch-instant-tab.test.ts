@@ -10,8 +10,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
 } from '../../../../shared/agent-launch-runtime-capability'
 import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type {
@@ -64,7 +64,10 @@ const OLD_PHONE: Partial<RpcContext> = {
 }
 const PHONE: Partial<RpcContext> = {
   ...OLD_PHONE,
-  clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY, AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY]
+  clientCapabilities: [
+    AGENT_LAUNCH_RUNTIME_CAPABILITY,
+    AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
+  ]
 }
 
 let directory: string
@@ -165,7 +168,7 @@ function paneEvidence(
   return {
     isPaneLive: (paneKey) => runtime.hasLiveTerminalForPaneKey(paneKey),
     openedRows: () => record.listOperationRows(),
-    paneWasLaidOutByLaunch: () => true,
+    launchPaneOnTab: () => ({}),
     openRows: async () => record.listOperationRows(),
     now: () => Date.now()
   }
@@ -233,7 +236,7 @@ describe('the instant tab', () => {
 
     await replayLaunch(runtime, { presentation: 'focused' }, CLI)
 
-    expect(terminalOptions(runtime)).toMatchObject({ surfaceOwner: false, launchTabShown: true })
+    expect(terminalOptions(runtime)).toMatchObject({ surfaceOwner: false })
   })
 
   it('reveals the spawn as before when the window never said it showed the tab', async () => {
@@ -244,7 +247,6 @@ describe('the instant tab', () => {
     expect(result.outcome.kind).toBe('terminal')
     expect(result.placement).toBeUndefined()
     expect(terminalOptions(runtime)).not.toHaveProperty('surfaceOwner')
-    expect(terminalOptions(runtime)).not.toHaveProperty('launchTabShown')
   })
 
   it('records the pane it showed with the launch, and lets the pane attach once the agent runs', async () => {
@@ -257,7 +259,7 @@ describe('the instant tab', () => {
       paneKey: PANE_KEY
     })
     await expect(paneVerdict(runtime)).resolves.toEqual({ kind: 'proceed' })
-    expect(runtime.withdrawAgentLaunchTab).not.toHaveBeenCalled()
+    expect(runtime.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
   })
 
   it('is not shown early for a chat-mode launch, whose tab is the session', async () => {
@@ -296,7 +298,7 @@ describe('the pane after its launch', () => {
       kind: 'not-started',
       code: 'spawn claude ENOENT'
     })
-    expect(runtime.withdrawAgentLaunchTab).not.toHaveBeenCalled()
+    expect(runtime.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
     // A restarted host: no launch in memory, the record read back from disk.
     resetAgentLaunchPanesForTests()
     const reopened = await openTestAgentSessionRecordStore(directory)
@@ -331,7 +333,7 @@ describe('the pane after its launch', () => {
     )
 
     expect(second.published).toEqual([])
-    expect(second.withdrawAgentLaunchTab).not.toHaveBeenCalled()
+    expect(second.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
     // Its agent exits and the pane remounts: still the first launch's pane, never "couldn't start".
     second.hasLiveTerminalForPaneKey.mockReturnValue(false)
     await expect(paneVerdict(second)).resolves.toEqual({ kind: 'proceed' })
@@ -352,11 +354,20 @@ describe('the pane after its launch', () => {
     })
     // The same id with other params: a conflict, so admission refuses and nothing runs.
     await expect(
-      replayLaunch(refused, { operationId, prompt: { text: 'other', delivery: 'submit' } }, CLI)
+      replayLaunch(
+        refused,
+        { operationId, paneKey: PANE_KEY, prompt: { text: 'other', delivery: 'submit' } },
+        CLI
+      )
     ).rejects.toThrow('agent_session_operation_conflict')
 
     await expect(verdicts[0]).resolves.toEqual({ kind: 'withdrawn' })
-    await vi.waitFor(() => expect(refused.withdrawAgentLaunchTab).toHaveBeenCalledOnce())
+    await vi.waitFor(() =>
+      expect(refused.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(
+        expect.objectContaining({ worktreeId: 'wt-7' }),
+        { kind: 'withdrawn' }
+      )
+    )
   })
 })
 
@@ -370,19 +381,22 @@ describe('retries', () => {
     const replayedIntoLiveAgent = hostWithWindow({ adoptedPanes: { [PANE_KEY]: 'term_1' } })
     await replayLaunch(replayedIntoLiveAgent, { paneKey: PANE_KEY, operationId }, CLI)
     expect(replayedIntoLiveAgent.published).toEqual([])
-    expect(replayedIntoLiveAgent.withdrawAgentLaunchTab).not.toHaveBeenCalled()
+    expect(replayedIntoLiveAgent.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
 
     // The window still has the tab: it finds it by id, and nothing is taken back.
     const replayedIntoShownTab = hostWithWindow({ reply: { created: false } })
     await replayLaunch(replayedIntoShownTab, { paneKey: PANE_KEY, operationId }, CLI)
     expect(replayedIntoShownTab.createTerminal).not.toHaveBeenCalled()
-    expect(replayedIntoShownTab.withdrawAgentLaunchTab).not.toHaveBeenCalled()
+    expect(replayedIntoShownTab.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
 
     // The tab is gone and so is its agent: the replay's own empty tab is taken back.
     const replayedAfterClose = hostWithWindow()
     await replayLaunch(replayedAfterClose, { paneKey: PANE_KEY, operationId }, CLI)
     await vi.waitFor(() =>
-      expect(replayedAfterClose.withdrawAgentLaunchTab).toHaveBeenCalledWith(TAB_ID)
+      expect(replayedAfterClose.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(
+        { worktreeId: 'wt-7', tabId: TAB_ID, leafId: LEAF_ID },
+        { kind: 'withdrawn' }
+      )
     )
     expect(replayedAfterClose.createTerminal).not.toHaveBeenCalled()
   })
@@ -404,7 +418,20 @@ describe('retries', () => {
     await replayLaunch(replayed, { paneKey: PANE_KEY, operationId }, CLI)
 
     await new Promise<void>((resolve) => setImmediate(resolve))
-    expect(replayed.withdrawAgentLaunchTab).not.toHaveBeenCalled()
+    expect(replayed.reportAgentLaunchPaneVerdict).not.toHaveBeenCalled()
+  })
+})
+
+describe('a retry that names no pane', () => {
+  it('shows no tab and moves no one when the record already holds its answer', async () => {
+    const operationId = nextOperationId()
+    await replayLaunch(hostWithWindow({ terminalPaneKey: PANE_KEY }), { operationId }, CLI)
+
+    const replayed = hostWithWindow({ terminalPaneKey: PANE_KEY })
+    await expect(replayLaunch(replayed, { operationId }, CLI)).resolves.toMatchObject({
+      outcome: { kind: 'terminal' }
+    })
+    expect(replayed.published).toEqual([])
   })
 })
 

@@ -79,7 +79,7 @@ describe('publishing a launch tab before its agent exists', () => {
     expect(terminal).toMatchObject({
       ptyId: null,
       launchAgent: 'claude',
-      agentLaunchLeafId: LEAF_ID
+      agentLaunchPane: { leafId: LEAF_ID }
     })
     expect(store.getState().terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
       type: 'leaf',
@@ -98,6 +98,15 @@ describe('publishing a launch tab before its agent exists', () => {
     const again = publishAgentLaunchTab(request({ requestId: 'request-2' }))
 
     expect(again).toMatchObject({ tabId: TAB_ID, created: false })
+    // A new launch into the pane: an earlier launch's outcome no longer stands.
+    store.getState().setTabAgentLaunchPane(TAB_ID, {
+      leafId: LEAF_ID,
+      outcome: { kind: 'unconfirmed' }
+    })
+    publishAgentLaunchTab(request({ requestId: 'request-3' }))
+    expect(
+      store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)?.agentLaunchPane
+    ).toEqual({ leafId: LEAF_ID })
     expect(store.getState().tabsByWorktree[WT]?.filter((tab) => tab.id === TAB_ID)).toHaveLength(1)
   })
 

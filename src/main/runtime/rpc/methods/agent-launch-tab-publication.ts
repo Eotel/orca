@@ -19,7 +19,7 @@ import type {
   AgentLaunchPlacementReceipt,
   AgentLaunchResult
 } from '../../../../shared/agent-launch-intent'
-import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabViewerRule
@@ -39,6 +39,7 @@ import {
 import { deriveAgentLaunchTerminalViewMode } from '../../../agent-launch/agent-launch-view-mode'
 import type { RpcContext } from '../core'
 import type { AgentLaunchParams } from './agent-launch-schemas'
+import { agentLaunchOperationCallerKey } from './agent-launch-replay'
 
 /**
  * Whose screen moves. `presentation` is `terminal.create`'s field with its meaning (focused: the
@@ -69,7 +70,7 @@ export function agentLaunchTabViewerRule(
 function readsEarlyLaunchTab(context: Pick<RpcContext, 'caller' | 'clientCapabilities'>): boolean {
   return (
     context.caller?.kind !== 'paired-device' ||
-    context.clientCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY) === true
+    context.clientCapabilities?.includes(AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY) === true
   )
 }
 
@@ -102,11 +103,27 @@ export function withPlacement(result: AgentLaunchResult, view: AgentLaunchView):
   return placement ? { ...result, placement } : result
 }
 
+function isKnownOperationWithoutPane(params: AgentLaunchParams, context: RpcContext): boolean {
+  if (params.paneKey || !params.operationId || !context.caller) {
+    return false
+  }
+  const store = context.runtime.openedAgentSessionRecordStore()
+  return (
+    store !== null &&
+    store.getOperationRow(agentLaunchOperationCallerKey(context), params.operationId) !== null
+  )
+}
+
 /** Never throws: the early tab is a view, and a launch must not fail over one. */
 export function publishEarlyTab(
   params: AgentLaunchParams,
   context: RpcContext
 ): Promise<EarlyAgentLaunchTab | null> {
+  if (isKnownOperationWithoutPane(params, context)) {
+    // A retry naming no pane would get a fresh tab for a request that runs nothing; its answer is
+    // already recorded, so it shows nothing and moves no one.
+    return Promise.resolve(null)
+  }
   return publishAgentLaunchTabEarly(params, context).catch((error: unknown) => {
     console.warn('[agent-launch] could not show the launch tab early', error)
     return null
@@ -189,7 +206,12 @@ export async function publishAgentLaunchTabEarly(
     publishing,
     finishRunning: (tabTakenBack) => running.finish({ tabTakenBack }),
     paneIsLive: () => runtime.hasLiveTerminalForPaneKey(paneKey),
-    closeTab: (tabId) => runtime.withdrawAgentLaunchTab(tabId)
+    // The pane alone: a split the user added while it waited stays theirs.
+    takeBack: () =>
+      runtime.reportAgentLaunchPaneVerdict(
+        { worktreeId: workspace.id, tabId: pane.tabId, leafId: pane.leafId },
+        { kind: 'withdrawn' }
+      )
   })
 }
 
@@ -199,7 +221,7 @@ function trackEarlyAgentLaunchTab(args: {
   publishing: Promise<AgentLaunchTabPublished>
   finishRunning: (tabTakenBack: boolean) => void
   paneIsLive: () => boolean
-  closeTab: (tabId: string) => void
+  takeBack: () => void
 }): EarlyAgentLaunchTab {
   let reply: AgentLaunchTabPublished | null = null
   let executing = false
@@ -236,8 +258,8 @@ function trackEarlyAgentLaunchTab(args: {
       void published.then((answer) => {
         const takeBack = answer?.created === true && !args.paneIsLive()
         args.finishRunning(takeBack)
-        if (takeBack && answer) {
-          args.closeTab(answer.tabId)
+        if (takeBack) {
+          args.takeBack()
         }
       })
     },

@@ -169,7 +169,7 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('keeps the pane an agent launch laid out, so it reads the launch record after a restart', () => {
+  it("keeps a launch pane's state for the tab's life, and drops a malformed one", () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
@@ -186,7 +186,7 @@ describe('parseWorkspaceSession', () => {
             sortOrder: 0,
             createdAt: 1,
             launchAgent: 'claude',
-            agentLaunchLeafId: 'leaf-1'
+            agentLaunchPane: { leafId: 'leaf-1', outcome: { kind: 'not-started', code: 'boom' } }
           },
           {
             id: 'tab2',
@@ -197,7 +197,7 @@ describe('parseWorkspaceSession', () => {
             color: null,
             sortOrder: 1,
             createdAt: 1,
-            agentLaunchLeafId: 42
+            agentLaunchPane: { leafId: 'leaf-2', outcome: { kind: 'exploded' } }
           }
         ]
       },
@@ -205,8 +205,11 @@ describe('parseWorkspaceSession', () => {
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.value.tabsByWorktree.wt[0].agentLaunchLeafId).toBe('leaf-1')
-      expect(result.value.tabsByWorktree.wt[1].agentLaunchLeafId).toBeUndefined()
+      expect(result.value.tabsByWorktree.wt[0].agentLaunchPane).toEqual({
+        leafId: 'leaf-1',
+        outcome: { kind: 'not-started', code: 'boom' }
+      })
+      expect(result.value.tabsByWorktree.wt[1].agentLaunchPane).toBeUndefined()
     }
   })
 

@@ -127,7 +127,7 @@ describe('desktop startup activation', () => {
   let ipcHandles: Set<string>
   let trustedRendererId: number | null
   let firstLoadListeners: (() => void)[]
-  const openRecordStore = vi.fn(() => Promise.resolve())
+  const startupSettled = vi.fn()
 
   // Mirrors openMainWindow's non-idempotent side effects that broke in the field.
   function openMainWindow(): FakeWindow {
@@ -165,14 +165,14 @@ describe('desktop startup activation', () => {
     ipcHandles = new Set()
     trustedRendererId = null
     firstLoadListeners = []
-    openRecordStore.mockClear()
+    startupSettled.mockClear()
     launchHooks.duringInstallDirRepair = () => {}
     launchHooks.failBeforeWindow = false
     state.mainWindow = null
     state.isServeMode = false
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only null-checks the runtime and warms its launch record before the mocked RPC server takes it.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only null-checks the runtime and marks its launch-record warm-up before the mocked RPC server takes it.
     state.runtime = {
-      openAgentSessionRecordStore: openRecordStore
+      noteAgentLaunchStartupSettled: startupSettled
     } as unknown as NonNullable<typeof state.runtime>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only calls whenReady().
     state.windowsShellPathHydration = {
@@ -222,7 +222,7 @@ describe('desktop startup activation', () => {
     }
   )
 
-  it('opens the launch record once the window has loaded and settled, so neither startup nor the first agent launch waits on it', async () => {
+  it('marks startup settled for the launch record only after the window has loaded and settled', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] })
     try {
       await initializeMainProcessReady({
@@ -230,14 +230,14 @@ describe('desktop startup activation', () => {
         openMainWindow: () => openMainWindow() as unknown as NonNullable<typeof state.mainWindow>,
         handleMacAppActivation: vi.fn()
       })
-      expect(openRecordStore).not.toHaveBeenCalled()
+      expect(startupSettled).not.toHaveBeenCalled()
 
       for (const listener of firstLoadListeners) {
         listener()
       }
-      expect(openRecordStore).not.toHaveBeenCalled()
+      expect(startupSettled).not.toHaveBeenCalled()
       vi.advanceTimersByTime(AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS)
-      expect(openRecordStore).toHaveBeenCalledTimes(1)
+      expect(startupSettled).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
     }

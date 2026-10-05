@@ -148,9 +148,7 @@ export function agentLaunchSurfaceFactory(
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),
         ...(viewMode ? { viewMode } : {}),
-        ...(windowShowsLaunchTab()
-          ? { surfaceOwner: false as const, launchTabShown: true as const }
-          : {}),
+        ...(windowShowsLaunchTab() ? { surfaceOwner: false as const } : {}),
         onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
       })
       const terminal = await created.catch(terminalSpawn.rethrow)

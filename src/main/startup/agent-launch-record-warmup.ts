@@ -1,20 +1,18 @@
 import type { BrowserWindow } from 'electron'
 import { mainProcessState as state } from './main-process-state'
 
-// Why a delay after load: the open is ~100-280 ms of synchronous disk work on the main thread
-// (measured, loaded machine), and the renderer's own start runs right after its first load.
+// Why a delay after load: the open is synchronous disk work on the main thread (4-16 ms measured on
+// an idle Mac, 95-280 ms on a loaded one), and the renderer's own start runs right after first load.
 export const AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS = 1_500
 
-/** The launch record is the first thing an agent launch reads; opening it ahead of the first click
- *  keeps that cost off the click. Admission still opens it on demand if this fails or comes late. */
-function warmAgentLaunchRecordStore(): void {
-  state.runtime?.openAgentSessionRecordStore().catch((error: unknown) => {
-    console.warn('[agent-launch] could not open the launch record at startup', error)
-  })
+/** Startup is settled: the runtime may open the launch record once a client that can launch is
+ *  connected too, so that first launch does not pay for it. */
+function markStartupSettled(): void {
+  state.runtime?.noteAgentLaunchStartupSettled()
 }
 
 function warmLater(): void {
-  setTimeout(warmAgentLaunchRecordStore, AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS).unref?.()
+  setTimeout(markStartupSettled, AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS).unref?.()
 }
 
 /** After the window's first load, so startup and the first paint never wait on it. */

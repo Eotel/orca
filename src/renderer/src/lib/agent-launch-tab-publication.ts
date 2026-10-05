@@ -59,6 +59,8 @@ export function publishAgentLaunchTab(
     if (request.prompt) {
       rememberAgentLaunchPanePrompt(tabId, request.prompt)
     }
+    // A new launch into this pane: whatever an earlier launch left on it no longer stands.
+    store.setTabAgentLaunchPane(tabId, { leafId })
     return { tabId, created: false, placement: { groupId } }
   }
 
@@ -81,7 +83,7 @@ export function publishAgentLaunchTab(
   const tab = store.createTab(worktreeId, placement.groupId, undefined, {
     id: tabId,
     initialLeafId: leafId,
-    agentLaunchLeafId: leafId,
+    agentLaunchPane: { leafId },
     launchAgent: request.launchAgent,
     viewMode: request.viewMode,
     ...(focuses ? {} : { activate: false, recordInteraction: false })

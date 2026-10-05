@@ -8,7 +8,7 @@ import {
   resolveOpaqueTerminalBackground
 } from '@/lib/terminal-theme'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
-import { shownAgentLaunchPaneRefusal } from './agent-launch-pane-notice-text'
+import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
 import { mapPaneTerminalErrors, terminalErrorForPane } from './terminal-error-accumulation'
 import {
   nativeChatLaunchAgentForLeaf,
@@ -99,14 +99,12 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     )
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [sshReconnectOwnsTerminalErrors])
-  const activePaneError = terminalErrorForPane(
+  const visibleTerminalError = terminalErrorForPane(
     terminalError,
     terminalErrorsByPaneId,
     activePane?.id ?? null
   )
-  // A launch's verdict is the pane's state, shown by its own notice; everything else is the toast's.
-  const visibleLaunchRefusal = shownAgentLaunchPaneRefusal(activePaneError)
-  const visibleTerminalError = visibleLaunchRefusal ? null : activePaneError
+  const visibleLaunchRefusal = agentLaunchPaneOutcomeForLeaf(terminalTab, activePane?.leafId)
   const menuPaneHasCustomTitle =
     contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
   const menuAgentSessionId = useAppStore((state) =>

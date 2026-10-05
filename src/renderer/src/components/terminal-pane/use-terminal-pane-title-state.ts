@@ -5,8 +5,7 @@ import {
   type RemotePaneLayoutPusher
 } from './remote-pane-layout-push'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
-import { parseAgentLaunchPaneRefusal } from '../../../../shared/agent-launch-pane-verdict'
-import { useAppStore } from '@/store'
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
 import { appendPaneTerminalError, clearPaneTerminalError } from './terminal-error-accumulation'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
 import { updateTerminalRemoteRuntimeRecoveryUiState } from './terminal-remote-runtime-recovery-ui-state'
@@ -22,8 +21,7 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
     setSessionStateSaveFailureMessage,
     setTerminalError,
     setTerminalErrorsByPaneId,
-    sshReconnectOwnsTerminalErrorsRef,
-    tabId
+    sshReconnectOwnsTerminalErrorsRef
   } = controller
   const [paneTitles, setPaneTitles] = useState<Record<number, string>>({})
   const paneTitlesRef = useRef<Record<number, string>>({})
@@ -89,11 +87,8 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
     [cancelPendingRenameFrames]
   )
   const onPtyErrorRef = useRef((paneId: number, message: string) => {
-    if (parseAgentLaunchPaneRefusal(message)?.kind === 'withdrawn') {
-      // The host's launch ran elsewhere or never ran: its tab goes rather than idling empty.
-      useAppStore
-        .getState()
-        .closeTab(tabId, { recordInteraction: false, captureRecentlyClosed: false })
+    if (message.includes(AGENT_LAUNCH_PANE_REFUSED_CODE)) {
+      // A launch pane's verdict reached the tab typed; its notice shows it, not an error.
       return
     }
     if (isTerminalSessionStateSaveFailure(message)) {

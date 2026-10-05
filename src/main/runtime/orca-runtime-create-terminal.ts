@@ -260,7 +260,6 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
               activate: presentation === 'focused',
               ...(presentation ? { presentation } : {}),
               ...dependencies.ownerSurfacing(opts.surfaceOwner !== false),
-              ...(opts.launchTabShown ? { launchTabShown: true as const } : {}),
               tabId,
               leafId
             })

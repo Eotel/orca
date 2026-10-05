@@ -197,13 +197,13 @@ export function claimAgentSessionOperationInto(
 /** Whether an admission left the right to run open, so the same transaction should claim it. */
 export type ClaimAfterAdmission = (decision: AgentSessionOperationDecision) => boolean
 
-/** Admission and, when `claimAfter` says so, the claim, in one transaction: the same swap as
- *  `claimAgentSessionOperationInto`, with one durable write instead of two. */
 /** An admission whose claimant laid out a pane before its effect; recorded only if the claim wins. */
 export type AgentSessionOperationClaimingAdmission = AgentSessionOperationAdmission & {
   ownedPane?: AgentSessionOperationOwnedPane
 }
 
+/** Admission and, when `claimAfter` says so, the claim, in one transaction: the same swap as
+ *  `claimAgentSessionOperationInto`, with one durable write instead of two. */
 export function admitAndClaimAgentSessionOperationInto(
   state: { operations: Map<string, AgentSessionOperationRow> },
   args: AgentSessionOperationClaimingAdmission,

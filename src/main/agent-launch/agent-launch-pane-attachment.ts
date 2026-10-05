@@ -1,10 +1,11 @@
 /**
  * What a pane may do when an `agent.launch` showed it before its agent existed.
  *
- * Derived on every spawn, never stored. The launch record (the operation ledger) names the launch
- * that owns the pane and how it ended, and survives a restart; the runtime says whether a process
- * holds the pane now. The one in-memory fact is a launch still running in this process, which dies
- * with that launch: the pane waits for it, then reads the record like any later mount would.
+ * Derived on every spawn. While the launch's fate is open, the launch record (the operation ledger)
+ * names the launch that owns the pane and how it ended; the runtime, and the pane's persisted
+ * binding, say whether a process holds it. Once the fate is final for the pane, the tab itself keeps
+ * it (`agentLaunchPane.outcome`) for the tab's life, so the pane no longer reads the record. The one
+ * in-memory fact is a launch still running in this process, which dies with that launch.
  */
 
 import {
@@ -13,7 +14,10 @@ import {
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import { isAgentLaunchResult } from '../../shared/agent-launch-intent'
-import type { AgentLaunchPaneVerdict } from '../../shared/agent-launch-pane-verdict'
+import type {
+  AgentLaunchPaneOutcome,
+  AgentLaunchPaneVerdict
+} from '../../shared/agent-launch-pane-verdict'
 
 type RunningLaunch = { finished: Promise<{ tabTakenBack: boolean }> }
 
@@ -86,12 +90,14 @@ export function agentLaunchPaneVerdictFromRecord(
 }
 
 export type AgentLaunchPaneEvidence = {
-  /** A process holds the pane: the spawn attaches to it, whatever the record says. */
+  /** A process holds the pane, live or by its persisted binding: the spawn adopts it, whatever the
+   *  record says. */
   isPaneLive(paneKey: string): boolean
   /** The record's rows when the store is already open; null when it is not. */
   openedRows(): Iterable<AgentSessionOperationRow> | null
-  /** The pane's tab says a launch laid it out, so it is worth opening the record for. */
-  paneWasLaidOutByLaunch(): boolean
+  /** What the pane's tab keeps about its launch: null when no launch laid it out, no outcome while
+   *  the fate is open, the outcome once it is final. */
+  launchPaneOnTab(): { outcome?: AgentLaunchPaneOutcome } | null
   openRows(): Promise<Iterable<AgentSessionOperationRow>>
   now(): number
 }
@@ -112,6 +118,10 @@ async function settleVerdict(
   if (evidence.isPaneLive(pane.paneKey)) {
     return { kind: 'proceed' }
   }
+  const final = evidence.launchPaneOnTab()?.outcome
+  if (final) {
+    return final
+  }
   // Bookkeeping never gates the user: a record that cannot be read leaves an ordinary terminal.
   const rows = evidence.openedRows() ?? (await evidence.openRows().catch(() => null))
   return rows
@@ -123,20 +133,17 @@ async function settleVerdict(
 }
 
 /**
- * Null when nothing can own the pane — no launch running for it, the record open with no row naming
- * it, or the record closed and the tab not laid out by a launch — so every other spawn keeps its
- * timing. Otherwise the verdict, once any running launch is over.
+ * Null when nothing can own the pane — no launch running for it, its tab keeping nothing about a
+ * launch, and no record row naming it — so every other spawn keeps its timing and reads nothing.
+ * Otherwise the verdict, once any running launch is over.
  */
 export function resolveAgentLaunchPaneVerdict(
   pane: AgentSessionOperationOwnedPane,
   evidence: AgentLaunchPaneEvidence
 ): Promise<AgentLaunchPaneVerdict> | null {
-  if (!runningLaunchesByPane.has(paneKeyOf(pane))) {
+  if (!runningLaunchesByPane.has(paneKeyOf(pane)) && evidence.launchPaneOnTab() === null) {
     const rows = evidence.openedRows()
-    const mayBeOwned = rows
-      ? listAgentSessionOperationRowsOwningPane(rows, pane, evidence.now()).length > 0
-      : evidence.paneWasLaidOutByLaunch()
-    if (!mayBeOwned) {
+    if (!rows || listAgentSessionOperationRowsOwningPane(rows, pane, evidence.now()).length === 0) {
       return null
     }
   }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
 import {
   pendingAgentSessionOperationRow,
@@ -55,7 +55,7 @@ function evidence(
   return {
     isPaneLive: () => false,
     openedRows: () => rows,
-    paneWasLaidOutByLaunch: () => false,
+    launchPaneOnTab: () => null,
     openRows: async () => rows ?? [],
     now: () => NOW,
     ...overrides
@@ -159,17 +159,46 @@ describe('a pane an agent launch laid out', () => {
     await expect(verdictFor(evidence([...rows]))).resolves.toEqual(expected)
   })
 
-  it('after a restart, opens the record for a pane its tab says a launch laid out', async () => {
+  it('after a restart, opens the record for a pane whose launch was still open', async () => {
     const restarted = evidence(null, {
-      paneWasLaidOutByLaunch: () => true,
+      launchPaneOnTab: () => ({}),
       openRows: async () => [row({ status: 'unknown' })]
     })
     await expect(verdictFor(restarted)).resolves.toEqual({ kind: 'unconfirmed' })
   })
 
+  it("answers from the tab once its pane's fate is final, without the record and past its expiry", async () => {
+    const openRows = vi.fn(async () => [])
+    const restarted = evidence(null, {
+      launchPaneOnTab: () => ({ outcome: { kind: 'not-started', code: 'boom' } }),
+      openRows
+    })
+    await expect(verdictFor(restarted)).resolves.toEqual({ kind: 'not-started', code: 'boom' })
+    expect(openRows).not.toHaveBeenCalled()
+  })
+
+  it('adopts a process its persisted binding names, even over a final "couldn\'t confirm"', async () => {
+    const survived = evidence(null, {
+      isPaneLive: () => true,
+      launchPaneOnTab: () => ({ outcome: { kind: 'unconfirmed' } })
+    })
+    await expect(verdictFor(survived)).resolves.toEqual({ kind: 'proceed' })
+  })
+
+  it('settles a pane no record names as an ordinary terminal, so its tab can forget the launch', async () => {
+    const orphaned = evidence(null, { launchPaneOnTab: () => ({}), openRows: async () => [] })
+    await expect(verdictFor(orphaned)).resolves.toEqual({ kind: 'proceed' })
+  })
+
+  it('reads nothing for a pane whose tab keeps nothing and no record row names', () => {
+    const openRows = vi.fn(async () => [])
+    expect(resolveAgentLaunchPaneVerdict(PANE, evidence(null, { openRows }))).toBeNull()
+    expect(openRows).not.toHaveBeenCalled()
+  })
+
   it('leaves an ordinary terminal when the record cannot be read: bookkeeping never gates the pane', async () => {
     const unreadable = evidence(null, {
-      paneWasLaidOutByLaunch: () => true,
+      launchPaneOnTab: () => ({}),
       openRows: () => Promise.reject(new Error('journal_open_refused'))
     })
     await expect(verdictFor(unreadable)).resolves.toEqual({ kind: 'proceed' })

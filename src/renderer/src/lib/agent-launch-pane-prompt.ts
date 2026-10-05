@@ -21,3 +21,8 @@ export function rememberAgentLaunchPanePrompt(tabId: string, prompt: string): vo
 export function agentLaunchPanePrompt(tabId: string): string | null {
   return promptsByTabId.get(tabId) ?? null
 }
+
+/** The pane's launch settled or went away: nothing is left to offer. */
+export function forgetAgentLaunchPanePrompt(tabId: string): void {
+  promptsByTabId.delete(tabId)
+}

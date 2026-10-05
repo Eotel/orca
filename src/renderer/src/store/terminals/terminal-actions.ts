@@ -79,8 +79,8 @@ export type TerminalActions = {
       recordInteraction?: boolean
       id?: string
       launchAgent?: TuiAgent
-      /** The leaf a host `agent.launch` laid out before its agent existed. */
-      agentLaunchLeafId?: string
+      /** The pane a host `agent.launch` laid out before its agent existed, while its fate is open. */
+      agentLaunchPane?: TerminalTab['agentLaunchPane']
       quickCommandLabel?: string | null
       viewMode?: Tab['viewMode']
       startupCwd?: string
@@ -133,6 +133,8 @@ export type TerminalActions = {
     }
   ) => void
   setTabColor: (tabId: string, color: string | null) => void
+  /** What the tab keeps about the launch that laid out one of its panes; undefined clears it. */
+  setTabAgentLaunchPane: (tabId: string, launchPane: TerminalTab['agentLaunchPane']) => void
   /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
   updateTabPtyId: (
     tabId: string,

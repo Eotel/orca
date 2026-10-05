@@ -179,6 +179,7 @@ export async function useIpcEventsForCloseRouting({
         onCreateTerminal: () => () => {},
         onRequestTerminalCreate: () => () => {},
         onPublishAgentLaunchTab: () => () => {},
+        onAgentLaunchPaneVerdict: () => () => {},
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate: () => {},
         onSplitTerminal: () => () => {},

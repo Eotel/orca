@@ -1,3 +1,4 @@
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type {
   AgentLaunchTabPublished,
@@ -64,7 +65,6 @@ export type RuntimeNotifier = {
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
-      launchTabShown?: true
       tabId?: string
       leafId?: string
       splitFromLeafId?: string
@@ -84,6 +84,8 @@ export type RuntimeNotifier = {
   publishAgentLaunchTab?(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
   ): Promise<AgentLaunchTabPublished>
+  /** A launch pane's fate, for the window to keep on its tab or act on. */
+  agentLaunchPaneVerdict?(event: AgentLaunchPaneVerdictEvent): void
   resolveLegacyWorkerTerminalRecovery?(
     paneKey: string,
     resolution: 'adopted' | 'exited' | 'rolled_back',

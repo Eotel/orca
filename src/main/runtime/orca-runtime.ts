@@ -5,9 +5,14 @@ import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch-tab-publication'
+import type {
+  AgentLaunchPaneAddress,
+  AgentLaunchPaneVerdict
+} from '../../shared/agent-launch-pane-verdict'
 import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
+import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 
 class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
@@ -36,9 +41,28 @@ class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
     return this.notifier.publishAgentLaunchTab(request)
   }
 
-  /** Takes back a tab published for a launch that did not run into it. */
-  withdrawAgentLaunchTab(tabId: string): void {
-    this.notifier?.closeTerminal(tabId)
+  /** Tells the window a launch pane's fate: it keeps a final one on the tab, clears a settled one,
+   *  and takes a withdrawn pane back (the pane alone when the user split the tab). */
+  reportAgentLaunchPaneVerdict(
+    pane: AgentLaunchPaneAddress,
+    verdict: AgentLaunchPaneVerdict
+  ): void {
+    this.notifier?.agentLaunchPaneVerdict?.({ ...pane, verdict })
+  }
+
+  private readonly agentLaunchRecordWarmup = createAgentLaunchRecordWarmupGate({
+    isOpen: () => peekOpenedAgentSessionRecordStore() !== null,
+    open: () => this.openAgentSessionRecordStore()
+  })
+
+  /** Startup is done; the launch record may open once a client that can launch is here too. */
+  noteAgentLaunchStartupSettled(): void {
+    this.agentLaunchRecordWarmup.startupSettled()
+  }
+
+  /** A client that can call `agent.launch` connected; its first launch should not open the record. */
+  noteAgentLaunchClientReady(): void {
+    this.agentLaunchRecordWarmup.launchClientReady()
   }
 
   /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */

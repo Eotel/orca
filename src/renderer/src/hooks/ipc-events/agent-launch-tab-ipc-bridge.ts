@@ -1,4 +1,5 @@
 import { publishAgentLaunchTab } from '@/lib/agent-launch-tab-publication'
+import { applyAgentLaunchPaneVerdict } from '@/lib/agent-launch-pane-verdict-application'
 
 export function registerAgentLaunchTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -14,6 +15,7 @@ export function registerAgentLaunchTabIpcBridge(unsubs: (() => void)[]): void {
           error: error instanceof Error ? error.message : 'agent_launch_tab_publish_failed'
         })
       }
-    })
+    }),
+    window.api.ui.onAgentLaunchPaneVerdict(applyAgentLaunchPaneVerdict)
   )
 }

@@ -119,7 +119,10 @@ describe('a terminal create that is handed a launch prompt', () => {
       onStartupPromptCarry
     })
 
-    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(false)
+    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(
+      false,
+      expect.objectContaining({ takesLaunchFile: true })
+    )
     expect(spawn.mock.calls[0]?.[0]?.launchFile).toBeUndefined()
     expect(spawnedCommand(spawn)).not.toContain('x'.repeat(100))
   })
@@ -136,7 +139,10 @@ describe('a terminal create that is handed a launch prompt', () => {
       onStartupPromptCarry
     })
 
-    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(false)
+    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(
+      false,
+      expect.objectContaining({ takesLaunchFile: true })
+    )
     expect(spawn.mock.calls[0]?.[0]?.launchFile).toBeUndefined()
     expect(spawnedCommand(spawn)).not.toContain('x'.repeat(100))
   })
@@ -161,7 +167,11 @@ describe('a terminal create that is handed a launch prompt', () => {
       launchArtifacts.writable = true
     }
 
-    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(false)
+    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(
+      false,
+      // The facts it planned by go with it, so the launch's paste and receipt read the same host.
+      expect.objectContaining({ takesLaunchFile: false })
+    )
     expect(spawn.mock.calls[0]?.[0]?.launchFile).toBeUndefined()
     expect(spawnedCommand(spawn)).not.toContain('brief line')
   })
@@ -188,7 +198,10 @@ describe('a terminal create that is handed a launch prompt', () => {
       onStartupPromptCarry
     })
 
-    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(true)
+    expect(onStartupPromptCarry).toHaveBeenCalledExactlyOnceWith(
+      true,
+      expect.objectContaining({ takesLaunchFile: true })
+    )
   })
 
   it('still builds a bare agent launch when no prompt is handed to it', async () => {

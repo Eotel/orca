@@ -167,9 +167,9 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
 
 /**
  * Whether the agent received the prompt its launch command carried, for a caller that acts on the
- * answer: the turn the prompt started (its hook, else the launch's own evidence) proves it; an exit
- * at startup refutes it; anything else is unconfirmed, never "not delivered", since the agent may
- * still run it. Worker start reads the same observation for a carried brief.
+ * answer: the agent proven running with it (or its hook turn, if that comes first) proves it; an
+ * exit at startup refutes it; anything else is unconfirmed, never "not delivered", since the agent
+ * may still run it. Worker start reads the same observation for a carried brief.
  */
 export async function confirmCarriedTerminalAgentLaunchPrompt(args: {
   runtime: CarriedPromptRuntime
@@ -181,7 +181,9 @@ export async function confirmCarriedTerminalAgentLaunchPrompt(args: {
   try {
     verdict = await args.runtime.observeTerminalLaunchTurnStart(
       args.handle,
-      { launchStartedAt: args.launchStartedAt, agent: args.agent },
+      // As main ran the follow-up once its paste reached the agent: the agent proven running with
+      // the prompt on its command line counts; its hook turn only gets there first.
+      { launchStartedAt: args.launchStartedAt, agent: args.agent, agentInFrontSuffices: true },
       AGENT_READY_TIMEOUT_MS
     )
   } catch {

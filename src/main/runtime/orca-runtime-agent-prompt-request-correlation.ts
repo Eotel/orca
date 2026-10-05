@@ -118,7 +118,7 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
    */
   async observeTerminalLaunchTurnStart(
     handle: string,
-    launch: { launchStartedAt: number; agent: TuiAgent | null },
+    launch: { launchStartedAt: number; agent: TuiAgent | null; agentInFrontSuffices?: boolean },
     timeoutMs: number,
     signal?: AbortSignal
   ): Promise<LaunchTurnStartVerdict> {
@@ -146,7 +146,12 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
         readForeground: async () =>
           agent ? await this.readLaunchedAgentForeground(ptyId, agent) : 'unknown'
       },
-      { launchStartedAt: launch.launchStartedAt, timeoutMs, ...(signal ? { signal } : {}) }
+      {
+        launchStartedAt: launch.launchStartedAt,
+        timeoutMs,
+        ...(signal ? { signal } : {}),
+        ...(launch.agentInFrontSuffices ? { agentInFrontSuffices: true } : {})
+      }
     )
   }
 

@@ -43,7 +43,15 @@ export type LaunchTurnStartProbe = {
  */
 export async function observeLaunchTurnStart(
   probe: LaunchTurnStartProbe,
-  args: { launchStartedAt: number; timeoutMs: number; signal?: AbortSignal }
+  args: {
+    launchStartedAt: number
+    timeoutMs: number
+    signal?: AbortSignal
+    /** The agent holding its terminal, no dialog up, proves the prompt without waiting out the hook
+     *  silence: the hook turn then only corroborates (a caller that acts on the result, as main did
+     *  once its paste reached the agent). */
+    agentInFrontSuffices?: boolean
+  }
 ): Promise<LaunchTurnStartVerdict> {
   const stop = new AbortController()
   const abort = (): void => stop.abort()
@@ -56,7 +64,13 @@ export async function observeLaunchTurnStart(
       .observeHookTurn?.(stop.signal)
       .then((verdict) => (verdict === 'unobserved' ? null : verdict))
       .catch(() => null)
-    const launch = watchLaunchEvidence(probe, args.launchStartedAt, deadline, stop.signal)
+    const launch = watchLaunchEvidence(
+      probe,
+      args.launchStartedAt,
+      deadline,
+      stop.signal,
+      args.agentInFrontSuffices === true
+    )
     return (await firstNonNull(hook ? [hook, launch] : [launch])) ?? 'unobserved'
   } finally {
     clearTimeout(expiry)
@@ -69,7 +83,8 @@ async function watchLaunchEvidence(
   probe: LaunchTurnStartProbe,
   launchStartedAt: number,
   deadline: number,
-  signal: AbortSignal
+  signal: AbortSignal,
+  agentInFrontSuffices: boolean
 ): Promise<LaunchTurnStartVerdict | null> {
   try {
     const baseline = probe.readWorkingSequence()
@@ -82,6 +97,7 @@ async function watchLaunchEvidence(
         return 'exited'
       }
       const hooksSilent =
+        agentInFrontSuffices ||
         !probe.observeHookTurn ||
         (Date.now() - launchStartedAt >= LAUNCH_HOOK_SILENCE_MS && !probe.hookReachedPane())
       if (hooksSilent) {

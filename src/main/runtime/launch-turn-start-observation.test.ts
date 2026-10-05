@@ -48,6 +48,29 @@ describe('observeLaunchTurnStart', () => {
     ).resolves.toBe('unobserved')
   })
 
+  // Why: a caller that acts on the result runs on main's timing, never after the hook silence.
+  it('proves a launch by the agent holding its terminal at once when that suffices', async () => {
+    const started = Date.now()
+    await expect(
+      observeLaunchTurnStart(probe({}), {
+        launchStartedAt: started,
+        timeoutMs: LAUNCH_HOOK_SILENCE_MS,
+        agentInFrontSuffices: true
+      })
+    ).resolves.toBe('unsupported')
+    expect(Date.now() - started).toBeLessThan(1_000)
+  })
+
+  it('still waits for no dialog before the agent in front proves it', async () => {
+    await expect(
+      observeLaunchTurnStart(probe({ dialogOnScreen: () => true }), {
+        launchStartedAt: Date.now(),
+        timeoutMs: 600,
+        agentInFrontSuffices: true
+      })
+    ).resolves.toBe('unobserved')
+  })
+
   it('takes the hook proof over the launch evidence', async () => {
     await expect(
       observeLaunchTurnStart(probe({ observeHookTurn: async () => 'observed' }), {

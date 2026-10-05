@@ -38,8 +38,10 @@ function withHostEvidence(
   evidence: { verdict?: Verdict; foreground?: 'agent' | 'shell' | 'unknown'; provesAgent?: boolean }
 ) {
   const observeTerminalLaunchTurnStart = vi.fn(
-    async (_handle: string, _launch: { launchStartedAt: number; agent: string }) =>
-      evidence.verdict ?? 'observed'
+    async (
+      _handle: string,
+      _launch: { launchStartedAt: number; agent: string; agentInFrontSuffices?: boolean }
+    ) => evidence.verdict ?? 'observed'
   )
   const sendTerminalAgentPrompt = vi.fn(
     async (
@@ -105,6 +107,8 @@ describe('a launch prompt whose caller acts on the result', () => {
     const launchArgs = observeTerminalLaunchTurnStart.mock.calls[0]![1]
     // Only a turn after the terminal was asked for proves this prompt.
     expect(launchArgs.agent).toBe('claude')
+    // Main's timing: the agent proven running counts, without waiting out a silent hook.
+    expect(launchArgs.agentInFrontSuffices).toBe(true)
     expect(launchArgs.launchStartedAt).toBeGreaterThanOrEqual(before)
   })
 

@@ -9,8 +9,6 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { buildSourceControlAgentDeliveryPlan } from './buildSourceControlAgentDeliveryPlan'
-import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { runSourceControlAgentActionStart } from './runSourceControlAgentActionStart'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
@@ -112,14 +110,12 @@ export function useSourceControlAgentActionStart({
       return buildSourceControlAgentDeliveryPlan({
         selectedAgent,
         commandInput,
-        // Why: the previewed command must show what the launch will really apply.
+        // Why: the check must judge the arguments the launch will really apply.
         agentArgs: agentArgsApply ? agentArgs : undefined,
-        promptDelivery,
         detectedAgents: currentDetectedAgents,
         connectionUnavailable,
         launchPlatform,
-        isRemote,
-        runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
+        isRemote
       })
     },
     [
@@ -127,12 +123,10 @@ export function useSourceControlAgentActionStart({
       agentArgsApply,
       commandInput,
       connectionUnavailable,
-      promptDelivery,
       refreshDetectedAgents,
       selectedAgent,
       launchPlatform,
-      isRemote,
-      worktreeId
+      isRemote
     ]
   )
 

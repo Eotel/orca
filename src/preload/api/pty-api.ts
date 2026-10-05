@@ -130,12 +130,6 @@ export type PtyApi = {
     }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>
-  /** What holds a launched agent's terminal, read fresh on its execution host (#24257's guard),
-   *  with the agent named on its command line kept apart from any other process. */
-  readLaunchedAgentForeground: (
-    id: string,
-    agent: string
-  ) => Promise<'launched-agent' | 'other' | 'shell' | 'unknown'>
   /** Local panes only; never joined for any other pane. */
   isCodexOnSharedServer: (id: string) => Promise<CodexSharedServerStatus>
   /** Runs the fix with the pane's own Codex; true only once verified. Local panes only. */

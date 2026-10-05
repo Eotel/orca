@@ -273,6 +273,8 @@ export type CreatedSurface = {
   structured?: AgentLaunchStructuredSurface
   /** True when this create put the prompt on the agent's launch command. */
   promptRodeLaunchCommand?: boolean
+  /** When the terminal was asked for, so only a later turn proves a carried prompt. */
+  launchStartedAt?: number
 }
 
 async function createSurface(
@@ -355,6 +357,7 @@ async function createTerminalSurface(
     worktreeId,
     agent: intent.agent,
     ...(startupPrompt ? { startupPrompt } : {}),
+    ...(intent.prompt?.confirmation ? { promptConfirmation: intent.prompt.confirmation } : {}),
     ...terminalLaunchInputs(intent),
     viewMode: deriveAgentLaunchTerminalViewMode({
       settings: readAgentLaunchModeSettings(execution.runtime),
@@ -370,7 +373,8 @@ async function createTerminalSurface(
       ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
     },
     ...(terminal.warning ? { warning: terminal.warning } : {}),
-    ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
+    ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {}),
+    ...(terminal.launchStartedAt ? { launchStartedAt: terminal.launchStartedAt } : {})
   }
 }
 

@@ -11,9 +11,11 @@ import {
   createdTabGroupId,
   createdTabOptions,
   createLaunchFunnelStore,
+  hostLaunchRequest,
   queuedStartupPayload,
   resetLaunchFunnelStore
 } from './agent-launch-funnel-test-harness'
+import { newTabPromptLaunchesThroughHost } from './launch-agent-new-tab-host-route'
 
 const store = createLaunchFunnelStore()
 
@@ -39,15 +41,23 @@ vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: vi.fn()
 }))
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn(async () => true) }))
-vi.mock('@/lib/agent-launch-prompt-receipt', () => ({
-  waitForLaunchPromptReceipt: vi.fn(async () => 'delivered')
-}))
 vi.mock('@/lib/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: true, reason: 'foreground-match' }))
 }))
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => []
 }))
+// A launch the host delivers waits on its reply; these tests read only what was sent.
+const callRuntimeRpc = vi.hoisted(() => vi.fn(() => new Promise(() => {})))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc, RuntimeRpcCallError: Error }))
+
+function launchesThroughHost(profile: AgentLaunchCallerProfile): boolean {
+  return newTabPromptLaunchesThroughHost({
+    agent: profile.args.agent,
+    prompt: profile.args.prompt?.trim() ?? '',
+    promptDelivery: profile.args.promptDelivery ?? 'auto-submit'
+  })
+}
 
 const cases = callerProfileCases()
 
@@ -112,6 +122,12 @@ describe('agent launch caller placement and telemetry', () => {
     async (_id, profile) => {
       await launch(profile)
 
+      if (launchesThroughHost(profile)) {
+        // The host starts the agent where the request names, so nothing waits on the tab.
+        expect(store.queueTabInitialCwd).not.toHaveBeenCalled()
+        expect(hostLaunchRequest(callRuntimeRpc)?.cwd).toBe(profile.args.initialCwd)
+        return
+      }
       if (profile.args.initialCwd) {
         expect(store.queueTabInitialCwd).toHaveBeenCalledExactlyOnceWith(
           'tab-1',
@@ -130,6 +146,15 @@ describe('agent launch caller placement and telemetry', () => {
   it.each(cases)('stamps the launch %s started with its telemetry source', async (_id, profile) => {
     await launch(profile)
 
+    if (launchesThroughHost(profile)) {
+      // The host stamps `agent_started` from the request; the window queues no command of its own.
+      expect(queuedStartupPayload(store)).toBeUndefined()
+      expect(hostLaunchRequest(callRuntimeRpc)).toMatchObject({
+        agent: profile.args.agent,
+        launchSource: profile.args.launchSource ?? 'tab_bar_quick_launch'
+      })
+      return
+    }
     expect(queuedStartupPayload(store)?.telemetry).toEqual({
       agent_kind: `kind:${profile.args.agent}`,
       // git-history-explain-commit names no source, so it reports as a tab-bar quick launch.
@@ -150,7 +175,7 @@ describe('agent launch caller placement and telemetry', () => {
     )
   })
 
-  it('seeds working status for a Command Code prompt that rides argv', async () => {
+  it('hands a Command Code prompt to the host, which reports its status from the agent', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
@@ -160,22 +185,11 @@ describe('agent launch caller placement and telemetry', () => {
       prompt: 'fix the spinner'
     })
 
-    expect(queuedStartupPayload(store)?.initialAgentStatus).toEqual({
-      agent: 'command-code',
-      prompt: 'fix the spinner'
+    // Why no seeded row: the window no longer types the line, so it cannot vouch for a turn.
+    expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
+    expect(hostLaunchRequest(callRuntimeRpc)?.prompt).toEqual({
+      text: 'fix the spinner',
+      delivery: 'submit'
     })
-  })
-
-  it('leaves initial agent status unset for every other argv prompt launch', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      requestId: 'request-4',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: 'fix the spinner'
-    })
-
-    expect(queuedStartupPayload(store)).not.toHaveProperty('initialAgentStatus')
   })
 })

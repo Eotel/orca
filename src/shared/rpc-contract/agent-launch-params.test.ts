@@ -18,6 +18,14 @@ describe('agent.launch params', () => {
     expect(AgentLaunch.parse(BASE)).not.toHaveProperty('agentArgs')
   })
 
+  it('reads a prompt confirmation, and an unknown one as absent rather than refusing', () => {
+    const prompt = (confirmation: unknown) =>
+      AgentLaunch.parse({ ...BASE, prompt: { text: 'p', delivery: 'submit', confirmation } }).prompt
+    expect(prompt('required')?.confirmation).toBe('required')
+    expect(prompt('best-effort')?.confirmation).toBe('best-effort')
+    expect(prompt('a-word-added-later')?.confirmation).toBeUndefined()
+  })
+
   it('accepts a cwd and rejects an empty one', () => {
     expect(AgentLaunch.parse({ ...BASE, cwd: '/repo/packages/api' }).cwd).toBe('/repo/packages/api')
     expect(AgentLaunch.safeParse({ ...BASE, cwd: '' }).success).toBe(false)

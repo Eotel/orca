@@ -9,6 +9,16 @@ const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft = vi.fn()
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
+/** A launch the host delivers waits on its reply; these tests read only what was sent. */
+const mockCallRuntimeRpc = vi.hoisted(() => vi.fn(() => new Promise(() => {})))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mockCallRuntimeRpc,
+  RuntimeRpcCallError: Error
+}))
+
+function hostRequest(): Record<string, unknown> | undefined {
+  return mockCallRuntimeRpc.mock.calls.find(([, method]) => method === 'agent.launchReplay')?.[2]
+}
 
 const store = {
   activeRepoId: 'repo-1',
@@ -182,8 +192,9 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).not.toHaveBeenCalled()
   })
 
-  // Why: a 9 KB multi-line PowerShell line was measured losing its line breaks; main pasted it.
-  it('pastes a long multi-line AI-button prompt on Windows, as main did, instead of a launch file', async () => {
+  // Why: main pasted an AI button's prompt on Windows; the host's rule keeps that for a caller that
+  // acts on the result, so the window sends the prompt and asks for a result the host can prove.
+  it('hands a long multi-line Windows AI-button prompt to the host, asking for proof', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const prompt = `Fix the failing checks.\n${'Then push. '.repeat(900)}Done.`
 
@@ -196,12 +207,13 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
       launchPlatform: 'win32'
     })
 
-    const queued = mockQueueTabStartupCommand.mock.calls[0]?.[1]
-    expect(queued?.launchFile).toBeUndefined()
-    expect(queued?.command).not.toContain('Fix the failing checks')
-    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
-      expect.objectContaining({ tabId: 'tab-1', content: prompt, agent: 'codex', submit: true })
-    )
+    expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+    expect(hostRequest()?.prompt).toEqual({
+      text: prompt,
+      delivery: 'submit',
+      confirmation: 'required'
+    })
   })
 
   it('uses the explicit startup shell platform when building draft launch commands', async () => {
@@ -262,7 +274,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     )
   })
 
-  it('quotes local Windows explicit agent args for cmd.exe prompt launches', async () => {
+  it('hands explicit agent args to the host, which quotes them for its own shell', async () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -275,13 +287,11 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
       launchPlatform: 'win32'
     })
 
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: 'codex "--model" "gpt-5" "fix the spinner"',
-        agentArgsOverride: '--model gpt-5'
-      })
-    )
+    expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
+    expect(hostRequest()).toMatchObject({
+      agentArgs: '--model gpt-5',
+      prompt: { text: 'fix the spinner', delivery: 'submit' }
+    })
   })
 
   it('quotes local Windows draft launches for Git Bash', async () => {

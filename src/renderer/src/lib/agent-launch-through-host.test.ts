@@ -82,6 +82,7 @@ function launch() {
     worktreeId: WT,
     groupId: store.getState().activeGroupIdByWorktree[WT],
     prompt: 'fix the failing checks',
+    confirmation: 'required',
     agentArgs: null,
     launchSource: 'source_control_recovery'
   })
@@ -117,7 +118,7 @@ describe('a desktop launch through the host', () => {
     expect(callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'agent.launchReplay', {
       agent: 'claude',
       target: { kind: 'existing', worktree: `id:${WT}` },
-      prompt: { text: 'fix the failing checks', delivery: 'submit' },
+      prompt: { text: 'fix the failing checks', delivery: 'submit', confirmation: 'required' },
       agentArgs: null,
       launchSource: 'source_control_recovery',
       placement: { groupId: store.getState().activeGroupIdByWorktree[WT] },
@@ -145,17 +146,21 @@ describe('a desktop launch through the host', () => {
 
     reply.resolve(terminalResult(lastParams().paneKey as string, 'handed-to-terminal'))
 
-    await expect(delivery).resolves.toEqual({ delivered: true, failureNotified: false })
+    await expect(delivery).resolves.toEqual({ kind: 'delivered' })
     expect(launchTab(tabId)).toBeDefined()
   })
 
   it('keeps the follow-up from running when the host did not deliver the prompt', async () => {
     callRuntimeRpc.mockResolvedValue(terminalResult('tab:leaf', 'not-delivered'))
-    await expect(launch().delivery).resolves.toEqual({
-      delivered: false,
-      failureNotified: false,
-      reason: 'not-delivered'
+    await expect(launch().delivery).resolves.toEqual({ kind: 'not-delivered', agentExited: false })
+  })
+
+  it('passes on that the agent exited at startup before it read its prompt', async () => {
+    callRuntimeRpc.mockResolvedValue({
+      ...terminalResult('tab:leaf', 'not-delivered'),
+      prompt: { delivery: 'submit', outcome: 'not-delivered', reason: 'agent-exited' }
     })
+    await expect(launch().delivery).resolves.toEqual({ kind: 'not-delivered', agentExited: true })
   })
 
   it('takes its tab back on a refusal, before the pane ever spawns', async () => {
@@ -166,9 +171,9 @@ describe('a desktop launch through the host', () => {
     reply.reject(rpcError('agent_session_operation_conflict'))
 
     await expect(delivery).resolves.toEqual({
-      delivered: false,
-      failureNotified: false,
-      reason: 'not-started'
+      kind: 'not-started',
+      unconfirmed: false,
+      code: 'agent_session_operation_conflict'
     })
     expect(launchTab(tabId)).toBeUndefined()
   })
@@ -181,11 +186,7 @@ describe('a desktop launch through the host', () => {
 
     reply.reject(rpcError('agent_session_operation_unknown'))
 
-    await expect(delivery).resolves.toEqual({
-      delivered: false,
-      failureNotified: true,
-      reason: 'not-started'
-    })
+    await expect(delivery).resolves.toEqual({ kind: 'pane-says' })
     expect(launchTab(tabId)).toBeDefined()
   })
 
@@ -196,7 +197,11 @@ describe('a desktop launch through the host', () => {
 
     reply.reject(rpcError('worktree_not_found'))
 
-    await expect(delivery).resolves.toMatchObject({ delivered: false, failureNotified: false })
+    await expect(delivery).resolves.toEqual({
+      kind: 'not-started',
+      unconfirmed: false,
+      code: 'worktree_not_found'
+    })
     expect(launchTab(tabId)).toBeUndefined()
   })
 
@@ -206,7 +211,7 @@ describe('a desktop launch through the host', () => {
       .mockResolvedValueOnce(terminalResult('other-tab:leaf', 'handed-to-terminal'))
     const { tabId, delivery } = launch()
 
-    await expect(delivery).resolves.toEqual({ delivered: true, failureNotified: false })
+    await expect(delivery).resolves.toEqual({ kind: 'delivered' })
     // The unrecorded launch shows its own tab when the agent spawns.
     expect(launchTab(tabId)).toBeUndefined()
     const [, method, params] = callRuntimeRpc.mock.calls[1]!

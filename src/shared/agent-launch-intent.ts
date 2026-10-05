@@ -23,9 +23,20 @@ export type AgentLaunchPromptDelivery =
    *  directly, so it no longer decides the route. */
   | 'draft'
 
+/**
+ * What the caller does with the delivery result. `required`: a follow-up acts on it (resolving review
+ * threads, posting replies, marking notes sent), so the host must give a result it can prove, as
+ * the desktop's paste once the agent runs did; a carried prompt counts only once the agent is seen
+ * to have it. `best-effort` (the default): the result is only reported. The caller states intent;
+ * how the prompt travels stays the host's.
+ */
+export type AgentLaunchPromptConfirmation = 'required' | 'best-effort'
+
 export type AgentLaunchPrompt = {
   text: string
   delivery: AgentLaunchPromptDelivery
+  /** Absent is `best-effort`. */
+  confirmation?: AgentLaunchPromptConfirmation
 }
 
 /**
@@ -172,13 +183,15 @@ export type AgentLaunchPromptDisposal =
    * `not-delivered` costs.
    */
   | { outcome: 'handed-to-terminal' }
-  /** Not delivered by this call; the caller still owns the text. */
-  | { outcome: 'not-delivered' }
+  /** Not delivered by this call; the caller still owns the text. `agent-exited`: the agent had it on
+   *  its command line and exited at startup before reading it (reported only under `required`). */
+  | { outcome: 'not-delivered'; reason?: 'agent-exited' }
   /**
-   * Only ever replayed, never a live answer: the host recorded the running agent, then stopped
-   * before the delivery reported back, so the text may or may not have arrived. The caller must not
-   * resend. Sent only to a caller advertising `agent.launch.prompt-unconfirmed.v1`; every other
-   * caller is refused with `agent_session_operation_unknown` instead.
+   * The text may or may not have arrived, so the caller must not resend. Replayed when the host
+   * recorded the running agent and stopped before the delivery reported back; live only under
+   * `confirmation: 'required'`, when nothing proved the agent received a carried prompt. Sent only to
+   * a caller advertising `agent.launch.prompt-unconfirmed.v1`; a replay to any other caller is
+   * refused with `agent_session_operation_unknown` instead.
    */
   | { outcome: 'unconfirmed' }
 
@@ -286,9 +299,9 @@ function isAgentLaunchPromptReceipt(value: unknown): value is AgentLaunchPromptR
   }
   return value.outcome === 'journaled'
     ? 'messageId' in value && typeof value.messageId === 'string'
-    : value.outcome === 'handed-to-terminal' ||
-        value.outcome === 'not-delivered' ||
-        value.outcome === 'unconfirmed'
+    : value.outcome === 'not-delivered'
+      ? !('reason' in value) || value.reason === undefined || value.reason === 'agent-exited'
+      : value.outcome === 'handed-to-terminal' || value.outcome === 'unconfirmed'
 }
 
 function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {

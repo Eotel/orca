@@ -27,7 +27,13 @@ import type { RpcContext } from '../core'
 import { structuredCallerFor } from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 import { commitStructuredAgentSessionLaunchPrompt } from './agent-launch-structured-prompt'
-import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
+import {
+  confirmCarriedTerminalAgentLaunchPrompt,
+  deliverTerminalAgentLaunchPrompt
+} from './agent-launch-terminal-prompt'
+import { readsUnconfirmedLaunchPrompt } from './agent-launch-replay'
+import { HANDED_TO_TERMINAL } from '../../../agent-launch/agent-launch-prompt-delivery'
+import type { AgentLaunchPromptConfirmation } from '../../../../shared/agent-launch-intent'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
 import { createStructuredAgentSessionId } from '../../../../shared/structured-agent-session-create'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
@@ -49,6 +55,9 @@ export function agentLaunchSurfaceFactory(
   // since its answer can land after admission.
   windowShowsLaunchTab: () => boolean = () => false
 ): AgentLaunchSurfaceFactory {
+  // Only a caller that reads `unconfirmed` can be told a carried prompt was not proven.
+  const confirmsPrompt = (confirmation: AgentLaunchPromptConfirmation | undefined): boolean =>
+    confirmation === 'required' && readsUnconfirmedLaunchPrompt(context)
   return {
     createStructuredSession: async ({
       worktreeId,
@@ -117,6 +126,7 @@ export function agentLaunchSurfaceFactory(
       worktreeId,
       agent,
       startupPrompt,
+      promptConfirmation,
       agentArgs,
       cwd,
       launchSource,
@@ -126,6 +136,7 @@ export function agentLaunchSurfaceFactory(
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
       let promptRodeLaunchCommand = false
+      const launchStartedAt = Date.now()
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
         // `cursor-agent` — so the runtime builds the configured launcher.
@@ -135,6 +146,10 @@ export function agentLaunchSurfaceFactory(
         ...(startupPrompt
           ? {
               startupPrompt,
+              // Main pasted such a prompt once the agent ran, on every host.
+              ...(confirmsPrompt(promptConfirmation)
+                ? { startupPromptPaste: 'once-agent-runs' as const }
+                : {}),
               onStartupPromptCarry: (carried: boolean) => {
                 promptRodeLaunchCommand = carried
               }
@@ -159,7 +174,8 @@ export function agentLaunchSurfaceFactory(
         ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
         // Its only warning is that the host could not reveal the tab, which the caller shows itself.
         ...(terminal.warning && !callerPresentsSurface ? { warning: terminal.warning } : {}),
-        ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {})
+        ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {}),
+        launchStartedAt
       }
     },
     deliverTerminalPrompt: async ({ handle, agent, freshLaunch, prompt }) =>
@@ -168,8 +184,21 @@ export function agentLaunchSurfaceFactory(
         handle,
         agent,
         freshLaunch,
-        text: prompt.text
-      })
+        text: prompt.text,
+        // As main's paste once the agent runs: only a shell proven in front refuses it.
+        ...(confirmsPrompt(prompt.confirmation)
+          ? { unprovableHost: 'write-unless-shell' as const }
+          : {})
+      }),
+    confirmCarriedTerminalPrompt: async ({ handle, agent, prompt, launchStartedAt }) =>
+      confirmsPrompt(prompt.confirmation)
+        ? confirmCarriedTerminalAgentLaunchPrompt({
+            runtime: context.runtime,
+            handle,
+            agent,
+            launchStartedAt
+          })
+        : HANDED_TO_TERMINAL
   }
 }
 

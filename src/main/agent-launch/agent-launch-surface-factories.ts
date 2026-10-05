@@ -4,7 +4,11 @@
  * implements, not part of the sequencing it runs.
  */
 
-import type { AgentLaunchPrompt } from '../../shared/agent-launch-intent'
+import type {
+  AgentLaunchPrompt,
+  AgentLaunchPromptConfirmation,
+  AgentLaunchPromptDisposal
+} from '../../shared/agent-launch-intent'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 /** How a surface is built once the executor has decided which one. Injected because an
@@ -29,6 +33,9 @@ export type AgentLaunchSurfaceFactory = {
      *  unless `carryLaunchPrompt` leaves it for the paste; `promptRodeLaunchCommand` reports which
      *  happened. */
     startupPrompt?: string
+    /** `required`: the caller acts on the delivery result, so the prompt travels as main delivered
+     *  such prompts (pasted once the agent runs where nothing could prove a carried one). */
+    promptConfirmation?: AgentLaunchPromptConfirmation
     /** Replaces the settings default for this launch only; `null` means no arguments at all. */
     agentArgs?: string | null
     cwd?: string
@@ -45,6 +52,8 @@ export type AgentLaunchSurfaceFactory = {
     warning?: string
     /** Reported by the surface that built the launch command, never predicted by the executor. */
     promptRodeLaunchCommand?: boolean
+    /** When the terminal was asked for, so only a later turn proves a carried prompt. */
+    launchStartedAt?: number
   }>
   /**
    * Commits the launch text as the session's first turn, answering with the transcript row's id.
@@ -74,6 +83,18 @@ export type AgentLaunchSurfaceFactory = {
     freshLaunch: boolean
     prompt: AgentLaunchPrompt
   }): Promise<boolean>
+  /**
+   * Under `confirmation: 'required'`, whether the agent received a prompt its launch command
+   * carried: proven by its turn, refuted by an exit at startup, else unconfirmed. Absent, or for any
+   * other caller, the carried prompt reads as handed over.
+   */
+  confirmCarriedTerminalPrompt?(args: {
+    handle: string
+    agent: TuiAgent
+    prompt: AgentLaunchPrompt
+    /** Taken before the spawn: only a turn after it proves this prompt. */
+    launchStartedAt: number
+  }): Promise<AgentLaunchPromptDisposal>
 }
 
 /** `fence` is the lease the create was admitted at, carried so the launch prompt's send can fill its

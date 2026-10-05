@@ -24,6 +24,8 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import type { AgentLaunchPromptDisposal } from '../../../../shared/agent-launch-intent'
+import type { LaunchTurnStartVerdict } from '../../launch-turn-start-observation'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
 import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
@@ -45,6 +47,8 @@ const BLOCKED_RECHECK_MS = 1_000
 type TerminalPromptRuntime = LaunchedAgentReadinessRuntime &
   LaunchedAgentWriteGuardRuntime &
   Pick<OrcaRuntimeService, 'sendTerminalAgentPrompt'>
+
+type CarriedPromptRuntime = Pick<OrcaRuntimeService, 'observeTerminalLaunchTurnStart'>
 
 type ReadinessClock = { now: () => number; sleep: (ms: number) => Promise<void> }
 
@@ -104,6 +108,8 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   /** False for a reused terminal, whose agent was already running before this launch. */
   freshLaunch: boolean
   text: string
+  /** `write-unless-shell`: main's paste once the agent runs, which only a proven shell refuses. */
+  unprovableHost?: 'refuse' | 'write-unless-shell'
   clock?: ReadinessClock
 }): Promise<boolean> {
   if (args.text.trim().length === 0) {
@@ -111,7 +117,9 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   }
   // Before the paste and again before Enter, for a reused pane too: a ready signal can come from a
   // shell whose agent exited, so only a read that finds the agent in front lets the text through.
-  const guard = createLaunchedAgentWriteGuard(args.runtime, args.agent)
+  const guard = createLaunchedAgentWriteGuard(args.runtime, args.agent, {
+    unprovableHost: args.unprovableHost ?? 'refuse'
+  })
   try {
     const wait = await waitThroughBlockingPrompts(
       args.runtime,
@@ -154,5 +162,39 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
     return false
   } finally {
     guard.dispose()
+  }
+}
+
+/**
+ * Whether the agent received the prompt its launch command carried, for a caller that acts on the
+ * answer: the turn the prompt started (its hook, else the launch's own evidence) proves it; an exit
+ * at startup refutes it; anything else is unconfirmed, never "not delivered", since the agent may
+ * still run it. Worker start reads the same observation for a carried brief.
+ */
+export async function confirmCarriedTerminalAgentLaunchPrompt(args: {
+  runtime: CarriedPromptRuntime
+  handle: string
+  agent: TuiAgent
+  launchStartedAt: number
+}): Promise<AgentLaunchPromptDisposal> {
+  let verdict: LaunchTurnStartVerdict
+  try {
+    verdict = await args.runtime.observeTerminalLaunchTurnStart(
+      args.handle,
+      { launchStartedAt: args.launchStartedAt, agent: args.agent },
+      AGENT_READY_TIMEOUT_MS
+    )
+  } catch {
+    return { outcome: 'unconfirmed' }
+  }
+  switch (verdict) {
+    case 'observed':
+    case 'permission':
+    case 'unsupported':
+      return { outcome: 'handed-to-terminal' }
+    case 'exited':
+      return { outcome: 'not-delivered', reason: 'agent-exited' }
+    case 'unobserved':
+      return { outcome: 'unconfirmed' }
   }
 }

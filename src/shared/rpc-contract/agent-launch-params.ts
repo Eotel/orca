@@ -74,7 +74,17 @@ export const AgentLaunchFields = z.object({
   prompt: z
     .object({
       text: z.string(),
-      delivery: z.enum(['submit', 'draft'])
+      delivery: z.enum(['submit', 'draft']),
+      /** `required`: the caller acts on the delivery result, so the host gives one it can prove.
+       *  Absent is `best-effort`, and so is a word this host does not know: refusing it would fail a
+       *  launch over a newer client's wish. Inside the replay fingerprint: it changes how the prompt
+       *  travels. Older hosts strip it and deliver best-effort. */
+      confirmation: z
+        .unknown()
+        .transform((value): 'required' | 'best-effort' | undefined =>
+          value === 'required' || value === 'best-effort' ? value : undefined
+        )
+        .optional()
     })
     .optional(),
   /** A chat seeds the options it accepts; a terminal launch reads the model, effort and mode. */

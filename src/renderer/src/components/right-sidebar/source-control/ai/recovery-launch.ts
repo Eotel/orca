@@ -175,6 +175,10 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   if (result.surface.kind === 'local-terminal') {
     focusTerminalTabSurface(result.surface.tabId)
   }
+  // Why: "started" is said once the agent has the prompt; a failure was already told by its notice.
+  if (result.promptDeliveryResult && !(await result.promptDeliveryResult).delivered) {
+    return false
+  }
   toast.success(copy.success)
   return true
 }

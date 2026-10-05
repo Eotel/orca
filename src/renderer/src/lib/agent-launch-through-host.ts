@@ -19,7 +19,10 @@ import {
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 import { createAgentSessionOperationId } from '@/runtime/agent-session-operation-id'
-import { isAgentLaunchResult, type AgentLaunchResult } from '../../../shared/agent-launch-intent'
+import {
+  isAgentLaunchResult,
+  type AgentLaunchPromptConfirmation
+} from '../../../shared/agent-launch-intent'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -32,23 +35,31 @@ export type HostAgentLaunchArgs = {
   groupId?: string
   /** Already trimmed and non-empty. */
   prompt: string
+  /** `required`: the caller acts on the delivery result, so the host must give one it can prove. */
+  confirmation: AgentLaunchPromptConfirmation
   /** Absent uses the settings default; `null` means no arguments. */
   agentArgs?: string | null
   cwd?: string
   sessionOptions?: Readonly<Record<string, string>>
   launchSource?: LaunchSource
   quickCommandLabel?: string | null
+  /** The launch seeds a workspace being opened, so its spawn must not reshuffle Recent. */
+  pendingActivationSpawn?: boolean
   /** The view the tab opens in, decided as for any new agent tab. */
   viewMode?: Tab['viewMode']
 }
 
-/** What became of the prompt. `failureNotified`: the user was already told, by the pane or a notice. */
-export type HostAgentLaunchDelivery = {
-  delivered: boolean
-  failureNotified: boolean
-  /** Why it was not delivered, for the caller's own notice. */
-  reason?: 'not-delivered' | 'unconfirmed' | 'not-started'
-}
+/** What became of the launch, as this window must tell it. */
+export type HostAgentLaunchDelivery =
+  | { kind: 'delivered' }
+  /** The agent runs (or ran) without the prompt. */
+  | { kind: 'not-delivered'; agentExited: boolean }
+  /** The agent runs; whether it has the prompt is unknown, so it must not be sent again. */
+  | { kind: 'unconfirmed' }
+  /** The pane shows how the launch ended: couldn't start, or couldn't confirm it started. */
+  | { kind: 'pane-says' }
+  /** The tab is gone, so the window says it: nothing started, or whether it did is unknown. */
+  | { kind: 'not-started'; unconfirmed: boolean; code?: string }
 
 /** Refused at admission: nothing ran under this click, and the host takes back the tab it was shown. */
 const ADMISSION_REFUSAL_CODES = new Set([
@@ -68,16 +79,21 @@ function closeLaunchTab(worktreeId: string, tabId: string): void {
   }
 }
 
-function deliveryFromResult(result: AgentLaunchResult): HostAgentLaunchDelivery {
+function deliveryFromResult(result: unknown): HostAgentLaunchDelivery {
+  if (!isAgentLaunchResult(result)) {
+    return { kind: 'unconfirmed' }
+  }
   switch (result.prompt?.outcome) {
     case 'handed-to-terminal':
     case 'journaled':
-      return { delivered: true, failureNotified: false }
+      return { kind: 'delivered' }
     case 'unconfirmed':
-      return { delivered: false, failureNotified: false, reason: 'unconfirmed' }
-    default:
+      return { kind: 'unconfirmed' }
+    case 'not-delivered':
+      return { kind: 'not-delivered', agentExited: result.prompt.reason === 'agent-exited' }
+    case undefined:
       // A missing receipt under-claims: the caller keeps the text.
-      return { delivered: false, failureNotified: false, reason: 'not-delivered' }
+      return { kind: 'not-delivered', agentExited: false }
   }
 }
 
@@ -85,7 +101,11 @@ function launchParams(args: HostAgentLaunchArgs) {
   return {
     agent: args.agent,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
-    prompt: { text: args.prompt, delivery: 'submit' },
+    prompt: {
+      text: args.prompt,
+      delivery: 'submit',
+      ...(args.confirmation === 'required' ? { confirmation: 'required' } : {})
+    },
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
     ...(args.cwd ? { cwd: args.cwd } : {}),
     ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
@@ -101,16 +121,12 @@ function launchParams(args: HostAgentLaunchArgs) {
  */
 async function launchWithoutRecord(args: HostAgentLaunchArgs): Promise<HostAgentLaunchDelivery> {
   try {
-    const result = await callRuntimeRpc<unknown>(
-      { kind: 'local' },
-      'agent.launch',
-      launchParams(args)
+    return deliveryFromResult(
+      await callRuntimeRpc<unknown>({ kind: 'local' }, 'agent.launch', launchParams(args))
     )
-    return isAgentLaunchResult(result)
-      ? deliveryFromResult(result)
-      : { delivered: false, failureNotified: false, reason: 'unconfirmed' }
-  } catch {
-    return { delivered: false, failureNotified: false, reason: 'not-started' }
+  } catch (error) {
+    const code = error instanceof RuntimeRpcCallError ? error.code : undefined
+    return { kind: 'not-started', unconfirmed: false, ...(code ? { code } : {}) }
   }
 }
 
@@ -121,30 +137,24 @@ async function settleLaunch(
   releaseHold: () => void
 ): Promise<HostAgentLaunchDelivery> {
   try {
-    const result = await send
-    if (!isAgentLaunchResult(result)) {
-      return { delivered: false, failureNotified: false, reason: 'unconfirmed' }
-    }
-    return deliveryFromResult(result)
+    return deliveryFromResult(await send)
   } catch (error) {
     const code = error instanceof RuntimeRpcCallError ? error.code : undefined
-    // The host never took the pane, so it would open as a shell: the tab goes, and the caller says why.
-    const hostTookPane = !isAgentLaunchPaneSpawnHeld(pane.tabId, pane.leafId)
     if (code === 'agent_session_operation_capacity') {
       closeLaunchTab(args.worktreeId, pane.tabId)
       return launchWithoutRecord(args)
     }
+    // A pane the host never took would open as a shell, and a refused one is the host's to take back.
+    const hostTookPane = !isAgentLaunchPaneSpawnHeld(pane.tabId, pane.leafId)
     if (!hostTookPane || (code !== undefined && ADMISSION_REFUSAL_CODES.has(code))) {
       closeLaunchTab(args.worktreeId, pane.tabId)
       return {
-        delivered: false,
-        failureNotified: false,
-        reason: code === 'agent_session_operation_unknown' ? 'unconfirmed' : 'not-started'
+        kind: 'not-started',
+        unconfirmed: code === 'agent_session_operation_unknown',
+        ...(code ? { code } : {})
       }
     }
-    // The pane reads how the launch ended off the record and says it: couldn't start, or couldn't
-    // confirm it started.
-    return { delivered: false, failureNotified: true, reason: 'not-started' }
+    return { kind: 'pane-says' }
   } finally {
     releaseHold()
   }
@@ -171,6 +181,7 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
     agentLaunchPane: { leafId },
     launchAgent: args.agent,
     quickCommandLabel: args.quickCommandLabel,
+    ...(args.pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
     ...(args.viewMode ? { viewMode: args.viewMode } : {})
   })
   rememberAgentLaunchPanePrompt(tabId, args.prompt)

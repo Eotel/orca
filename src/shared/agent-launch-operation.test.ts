@@ -66,6 +66,23 @@ describe('fields the launch fingerprint covers', () => {
   })
 })
 
+describe('a prompt confirmation in the fingerprint', () => {
+  const launch = (confirmation?: string) =>
+    computeAgentLaunchFingerprint({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: 'id:wt-1' },
+      prompt: { text: 'resolve', delivery: 'submit', ...(confirmation ? { confirmation } : {}) }
+    })
+
+  it('separates a launch that acts on its result from one that does not', () => {
+    expect(launch('required')).not.toBe(launch())
+  })
+
+  it('reads an explicit best-effort as its absence, as every row before it was written', () => {
+    expect(launch('best-effort')).toBe(launch())
+  })
+})
+
 describe('fields the launch fingerprint deliberately ignores', () => {
   it('does not separate two launches that differ only in launchSource', () => {
     // Telemetry. Two buttons producing the same launch are one operation, and a retry that got

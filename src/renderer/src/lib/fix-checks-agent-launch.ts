@@ -224,7 +224,8 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
     if (result.surface.kind === 'local-terminal') {
       focusTerminalTabSurface(result.surface.tabId)
     }
-    return true
+    // Why: "started" is said once the agent has the prompt; a failure was already told by its notice.
+    return result.promptDeliveryResult ? (await result.promptDeliveryResult).delivered : true
   }
 
   if (!args.item || !args.openModalFallback) {

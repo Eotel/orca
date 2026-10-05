@@ -2,6 +2,8 @@ import { toast } from 'sonner'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { AgentLaunchPaneOutcome } from '../../../shared/agent-launch-pane-verdict'
+import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-launch-pane-notice-text'
 
 /**
  * The agent started but the host kept its prompt: the agent never showed it was ready for input,
@@ -74,6 +76,17 @@ export function showAgentLaunchNotStartedNotice(args: { prompt: string }): void 
     ),
     args.prompt
   )
+}
+
+/**
+ * A launch whose tab the window had to take back, because the host never took its pane or refused
+ * the launch. The pane would have said it, so the notice uses the pane's words.
+ */
+export function showAgentLaunchOutcomeNotice(args: {
+  outcome: AgentLaunchPaneOutcome
+  prompt: string
+}): void {
+  showPromptCopyNotice(agentLaunchPaneNoticeText(args.outcome), args.prompt)
 }
 
 function showPromptCopyNotice(message: string, prompt: string): void {

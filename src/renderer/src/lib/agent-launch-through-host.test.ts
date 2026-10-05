@@ -24,7 +24,9 @@ vi.mock('@/store', () => ({
     }
   }
 }))
-const callRuntimeRpc = vi.hoisted(() => vi.fn())
+const callRuntimeRpc = vi.hoisted(() =>
+  vi.fn<(target: unknown, method: string, params: Record<string, unknown>) => Promise<unknown>>()
+)
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   callRuntimeRpc
@@ -73,7 +75,11 @@ function launchTab(tabId: string) {
 }
 
 function lastParams(): Record<string, unknown> {
-  return callRuntimeRpc.mock.calls.at(-1)![2] as Record<string, unknown>
+  return callRuntimeRpc.mock.calls.at(-1)?.[2] ?? {}
+}
+
+function lastPaneKey(): string {
+  return String(lastParams().paneKey)
 }
 
 function launch() {
@@ -144,7 +150,7 @@ describe('a desktop launch through the host', () => {
     const { tabId, delivery } = launch()
     hostTakesPane(tabId)
 
-    reply.resolve(terminalResult(lastParams().paneKey as string, 'handed-to-terminal'))
+    reply.resolve(terminalResult(lastPaneKey(), 'handed-to-terminal'))
 
     await expect(delivery).resolves.toEqual({ kind: 'delivered' })
     expect(launchTab(tabId)).toBeDefined()
@@ -253,7 +259,7 @@ describe('a desktop launch through the host', () => {
       const reply = deferred<unknown>()
       callRuntimeRpc.mockReturnValueOnce(reply.promise)
       const { delivery } = launch()
-      const [tabId, leafId] = (lastParams().paneKey as string).split(':')
+      const [tabId, leafId] = lastPaneKey().split(':')
       store.getState().createTab(WT, undefined, undefined, { id: tabId, initialLeafId: leafId })
       reply.reject(rpcError('agent_session_operation_unknown'))
       await expect(delivery).resolves.toEqual({ kind: 'pane-says' })

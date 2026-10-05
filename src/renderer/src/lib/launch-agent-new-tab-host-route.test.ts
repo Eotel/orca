@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostAgentLaunchDelivery } from './agent-launch-through-host'
 
 const TAB = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
-const store = {
-  tabsByWorktree: { 'wt-1': [{ id: TAB }] } as Record<string, { id: string }[]>,
+const store: {
+  tabsByWorktree: Record<string, { id: string }[]>
+  markNativeChatLaunchPromptFailed: ReturnType<typeof vi.fn>
+} = {
+  tabsByWorktree: { 'wt-1': [{ id: TAB }] },
   markNativeChatLaunchPromptFailed: vi.fn()
 }
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))

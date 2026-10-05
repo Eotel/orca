@@ -37,6 +37,8 @@ vi.mock('fs', () => ({
   accessSync: accessSyncMock,
   mkdirSync: mkdirSyncMock,
   writeFileSync: writeFileSyncMock,
+  mkdtempSync: vi.fn((prefix: string) => `${prefix}abc123`),
+  realpathSync: vi.fn((path: string) => path),
   chmodSync: vi.fn(),
   renameSync: vi.fn(),
   rmSync: vi.fn(),
@@ -116,6 +118,7 @@ vi.mock('../shell-prompt-readiness-probe', () => ({
 
 import { LocalPtyProvider } from './local-pty-provider'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
+import { buildLaunchFilePointer, carryInLaunchFile } from '../../shared/launch-prompt-file'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -218,6 +221,70 @@ describe('LocalPtyProvider', () => {
 
         await vi.advanceTimersByTimeAsync(200)
         expect(mockProc.write).toHaveBeenCalledWith(`${command}\n`)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('stages a long startup command and types only the line that sources it', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/sh'
+        const command = `claude '${'x'.repeat(600)}'`
+
+        const result = await provider.spawn({ cols: 80, rows: 24, command })
+
+        expect(result).not.toHaveProperty('startupDelivery')
+        const staged = writeFileSyncMock.mock.calls.find(([path]) =>
+          String(path).includes('orca-launch-')
+        )
+        expect(staged?.[1]).toContain(`\n${command}\n`)
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).toHaveBeenCalledWith(`. '${staged?.[0]}'\n`)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('prints a notice in the terminal when it types a line it could not stage', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/sh'
+        const received: string[] = []
+        provider.configure({ onData: (_id, data) => received.push(data) })
+        writeFileSyncMock.mockImplementationOnce(() => {
+          throw new Error('ENOSPC: no space left on device')
+        })
+        const command = `claude '${'x'.repeat(600)}'`
+
+        await provider.spawn({ cols: 80, rows: 24, command })
+
+        expect(received.join('')).toContain(
+          '[orca] Could not stage the launch command (ENOSPC: no space left on device)'
+        )
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).toHaveBeenCalledWith(`${command}\n`)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('writes a launch file before the line that names it is typed', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/sh'
+        const { prompt, launchFile } = carryInLaunchFile('secret brief')
+
+        await provider.spawn({ cols: 80, rows: 24, command: `claude '${prompt}'`, launchFile })
+
+        const written = writeFileSyncMock.mock.calls.find(([path]) =>
+          String(path).endsWith('task-context.md')
+        )
+        expect(written?.[1]).toBe('secret brief')
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).toHaveBeenCalledWith(
+          `claude '${buildLaunchFilePointer(String(written?.[0]))}'\n`
+        )
       } finally {
         vi.useRealTimers()
       }

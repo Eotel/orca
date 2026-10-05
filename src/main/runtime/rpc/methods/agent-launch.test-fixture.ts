@@ -37,7 +37,8 @@ export type AgentLaunchRuntimeStubOptions = {
   startupTerminalPaneKey?: string
   /** The reserved pane is already live, so a create that requires a fresh pane is refused. */
   terminalPaneAlreadyLive?: boolean
-  /** What the runtime reports about an offered prompt's typed line; unset reports nothing. */
+  /** Whether the runtime reports an offered prompt carried; unset reports it carried, as for an
+   *  agent that reads its launch file. */
   lineCarriesPrompt?: boolean
   /** Panes this runtime found already running, by the handle it issued them: a restarted host
    *  that could not re-adopt a surviving PTY's handle issues a new one for the same pane. */
@@ -49,8 +50,8 @@ function reportPromptCarry(
   report: unknown,
   offered: unknown
 ): void {
-  if (typeof report === 'function' && offered && options.lineCarriesPrompt !== undefined) {
-    report(options.lineCarriesPrompt)
+  if (typeof report === 'function' && offered) {
+    report(options.lineCarriesPrompt ?? true)
   }
 }
 

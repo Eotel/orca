@@ -97,12 +97,16 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         command: sequencedStartup.command,
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
+        ...(request.startupTerminalHandle
+          ? { preAllocatedHandle: request.startupTerminalHandle }
+          : {}),
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
+        ...(sequencedStartup.launchFile ? { launchFile: sequencedStartup.launchFile } : {}),
         telemetry: sequencedStartup.telemetry,
         ...ownerSurfacing(shouldActivate)
       })

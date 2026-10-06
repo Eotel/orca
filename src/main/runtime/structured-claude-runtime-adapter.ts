@@ -84,7 +84,7 @@ export function createStructuredClaudeRuntimeAdapter(
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
-      ...(deps.resolveClaudeLaunchArgs ? { resolveLaunchArgs: deps.resolveClaudeLaunchArgs } : {}),
+      resolveLaunchArgs: deps.resolveClaudeLaunchArgs ?? (() => []),
       resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),
       ...(deps.resolveClaudeInheritedEnv

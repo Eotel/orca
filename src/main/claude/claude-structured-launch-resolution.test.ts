@@ -70,7 +70,7 @@ function resolverFor(
     resolveAuthPolicy: () => ({ stripAuthEnv }),
     resolvePermissionMode: () => claudeStructuredPermissionModeForSettings({ agentDefaultArgs }),
     hasTranscript,
-    ...(resolveLaunchArgs ? { resolveLaunchArgs } : {}),
+    resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? []),
     ...(resolveEnv ? { resolveEnv } : {})
   })
 }
@@ -411,6 +411,7 @@ describe('claude structured launch resolution', () => {
 
   it('builds on the supplied inherited env instead of Orca process env', async () => {
     const launch = await createClaudeStructuredLaunchResolver({
+      resolveLaunchArgs: () => [],
       store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
@@ -423,6 +424,7 @@ describe('claude structured launch resolution', () => {
 
   it('drops an inherited CLAUDE_CONFIG_DIR so the record stays the only Claude home the pin sees', async () => {
     const launch = await createClaudeStructuredLaunchResolver({
+      resolveLaunchArgs: () => [],
       store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
@@ -441,6 +443,7 @@ describe('claude structured launch resolution', () => {
 
   it('keeps a configured overlay CLAUDE_CONFIG_DIR over the dropped inherited one', async () => {
     const launch = await createClaudeStructuredLaunchResolver({
+      resolveLaunchArgs: () => [],
       store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
@@ -454,6 +457,7 @@ describe('claude structured launch resolution', () => {
 
   it('still strips an inherited auth key under a managed account', async () => {
     const launch = await createClaudeStructuredLaunchResolver({
+      resolveLaunchArgs: () => [],
       store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
@@ -491,6 +495,7 @@ describe('claude structured launch resolution', () => {
     makeExecutable(nodeCommand)
 
     const launch = await createClaudeStructuredLaunchResolver({
+      resolveLaunchArgs: () => [],
       store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => claudeCommand,
@@ -533,6 +538,7 @@ describe('claude structured launch resolution', () => {
   describe('managed-account gate on every acquisition', () => {
     function resolverWithGate(read: () => ClaudeManagedAccountGateSettings | null) {
       return createClaudeStructuredLaunchResolver({
+        resolveLaunchArgs: () => [],
         store: { getRecord: () => RESUMABLE } as unknown as AgentSessionRecordStore,
         resolveWorkspacePath: async (id) => `/repos/${id}`,
         resolveCommand: () => '/usr/local/bin/claude',

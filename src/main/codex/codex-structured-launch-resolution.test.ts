@@ -50,7 +50,7 @@ function resolverFor(
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
     resolveRollout,
-    ...(resolveLaunchArgs ? { resolveLaunchArgs } : {}),
+    resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? []),
     isWindowsProcessStartTimeAvailable: () => true,
     resolvePermissionPolicy: () => codexStructuredPermissionPolicyForSettings({ agentDefaultArgs })
   })
@@ -113,6 +113,7 @@ describe('codex structured launch resolution', () => {
 
     await withPlatform('win32', async () => {
       const resolveLaunch = createCodexStructuredLaunchResolver({
+        resolveLaunchArgs: () => [],
         store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
         resolveCommand: () => command,
@@ -130,6 +131,7 @@ describe('codex structured launch resolution', () => {
     await withPlatform('win32', async () => {
       const resolveWorkspacePath = vi.fn(async () => String.raw`C:\workspaces\orca`)
       const resolveLaunch = createCodexStructuredLaunchResolver({
+        resolveLaunchArgs: () => [],
         store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
         resolveWorkspacePath,
         isWindowsProcessStartTimeAvailable: () => false

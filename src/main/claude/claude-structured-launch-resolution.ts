@@ -113,7 +113,7 @@ export type ClaudeStructuredLaunch = {
 
 export type ClaudeStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
-  resolveLaunchArgs?: () => Promise<string[]> | string[]
+  resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCommand?: () => string
   resolveEnv?: () =>
@@ -290,9 +290,7 @@ export function createClaudeStructuredLaunchResolver(
           providerSessionId,
           claudeConfigDir: record.accountHome.path
         })))
-    const configuredArgs = claudeStructuredLaunchArgs(
-      (await deps.resolveLaunchArgs?.()) ?? record.launchArgs ?? []
-    )
+    const configuredArgs = claudeStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const permission = claudeStructuredPermissionOptions(
       (await deps.resolvePermissionMode?.()) ?? 'default'
     )

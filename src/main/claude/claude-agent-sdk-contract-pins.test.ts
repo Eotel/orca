@@ -159,6 +159,7 @@ function resolvedLaunch(permissionMode: PermissionMode, launchArgs: string[] = [
     launchArgs
   } as unknown as AgentSessionRecord
   return createClaudeStructuredLaunchResolver({
+    resolveLaunchArgs: () => launchArgs,
     store: { getRecord: () => record } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath: async () => '/repos/workspace-1',
     resolveCommand: () => FAKE_CLI,

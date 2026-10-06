@@ -258,9 +258,7 @@ async function installOnJournal(
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
       resolveEnvironment: resolveCodexEnvironment,
-      ...(deps.resolveLaunchArgs
-        ? { resolveLaunchArgs: () => deps.resolveLaunchArgs!('codex') }
-        : {}),
+      resolveLaunchArgs: () => deps.resolveLaunchArgs?.('codex') ?? [],
       ...(deps.resolveCodexPermissionPolicy
         ? { resolvePermissionPolicy: deps.resolveCodexPermissionPolicy }
         : {}),

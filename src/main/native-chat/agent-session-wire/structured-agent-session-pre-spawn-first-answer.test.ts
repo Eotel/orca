@@ -18,6 +18,7 @@ import { openTestAttachConversation } from './structured-agent-session-attach-te
 import { performAttach } from './structured-agent-session-attach-flow'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -109,6 +110,19 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
 }
 
 describe('a create that fails before any process spawns', () => {
+  it('answers a safe saved Arguments problem on the first call and replay', async () => {
+    const { first, replay } = await firstAnswerAndReplay(
+      new AgentSessionPreSpawnError(
+        new StructuredAgentArgumentsError('Claude', '--model=private', 'multipleValues')
+      )
+    )
+    const sentence =
+      "Claude couldn't start. Saved Arguments give --model more than one value. Edit them in Settings > Agents > Arguments. Send your message to try again."
+    expect(first).toMatchObject({ ok: false, error: { message: sentence } })
+    expect(replay).toMatchObject({ ok: false, refusal: { message: sentence } })
+    expect(JSON.stringify([first, replay])).not.toContain('private')
+  })
+
   it.each<[string, string, AgentSessionPreSpawnReason | undefined, string]>([
     [
       'the managed account env override',

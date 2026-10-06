@@ -1,25 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { claudeStructuredExtraArgs } from './claude-structured-launch-args'
+import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
 
 describe('Claude structured launch arguments', () => {
   it('translates long flags, equals values, and the model short flag', () => {
     expect(
-      claudeStructuredExtraArgs([
-        '--model',
+      claudeStructuredLaunchArgs([
+        '-m',
         'opus',
         '--effort=high',
-        '-m',
-        'sonnet',
         '--chrome',
         '--add-dir',
         '/repo/other'
       ])
-    ).toEqual({ model: 'sonnet', effort: 'high', chrome: null, 'add-dir': '/repo/other' })
+    ).toEqual({
+      extraArgs: { model: 'opus', effort: 'high', chrome: null },
+      additionalDirectories: ['/repo/other']
+    })
   })
 
   it('removes SDK transport, permission, and lifecycle flags with their values', () => {
     expect(
-      claudeStructuredExtraArgs([
+      claudeStructuredLaunchArgs([
         '-p',
         '--input-format',
         'text',
@@ -48,14 +49,42 @@ describe('Claude structured launch arguments', () => {
         '--model',
         'opus'
       ])
-    ).toEqual({ model: 'opus' })
+    ).toEqual({ extraArgs: { model: 'opus' }, additionalDirectories: [] })
   })
 
   it('ignores positional prompts and tokens after --', () => {
     expect(
-      claudeStructuredExtraArgs(['prompt', '--model', 'opus', '--', '--effort', 'high'])
+      claudeStructuredLaunchArgs(['prompt', '--model', 'opus', '--', '--effort', 'high'])
     ).toEqual({
-      model: 'opus'
+      extraArgs: { model: 'opus' },
+      additionalDirectories: []
     })
+  })
+  it('keeps repeated and multi-value directory options in order', () => {
+    expect(
+      claudeStructuredLaunchArgs([
+        '--add-dir',
+        '/one',
+        '/two',
+        '--model',
+        'opus',
+        '--add-dir=/three',
+        '/four'
+      ])
+    ).toEqual({
+      extraArgs: { model: 'opus' },
+      additionalDirectories: ['/one', '/two', '/three', '/four']
+    })
+  })
+
+  it.each([
+    ['--model', 'opus', '-m', 'sonnet'],
+    ['--model', 'opus', 'sonnet'],
+    ['--effort=high', 'medium'],
+    ['--chrome', '--chrome'],
+    ['--add-dir'],
+    ['--add-dir=']
+  ])('refuses options the SDK cannot preserve: %j', (...args) => {
+    expect(() => claudeStructuredLaunchArgs(args)).toThrow(/Arguments/)
   })
 })

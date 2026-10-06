@@ -1,6 +1,7 @@
 // Only root CLI options can precede `app-server`. A prompt or another subcommand
 // would change the process Orca starts, and permission options belong to Orca.
 import { parseTomlKeyPath } from './config-toml-key-path'
+import { StructuredAgentArgumentsError } from '../native-chat/structured-agent-arguments-error'
 
 const VALUE_OPTIONS = new Set([
   '-c',
@@ -79,7 +80,7 @@ export function codexStructuredLaunchArgs(tokens: readonly string[]): string[] {
     }
     const option = optionName(token)
     if (option === '--remote' || option === '--remote-auth-token-env') {
-      throw new Error(`Codex structured chat cannot use ${option} in Arguments`)
+      throw new StructuredAgentArgumentsError('Codex', option, 'unsupportedOption')
     }
     if (DROPPED_SWITCHES.has(option)) {
       continue
@@ -91,7 +92,7 @@ export function codexStructuredLaunchArgs(tokens: readonly string[]): string[] {
     if (VALUE_OPTIONS.has(option) || DROPPED_VALUE_OPTIONS.has(option)) {
       const value = inlineValue(token, option) ?? tokens[++index]
       if (!value || value === '--' || (value.startsWith('-') && !token.includes('='))) {
-        throw new Error(`Codex Arguments option ${option} needs a value`)
+        throw new StructuredAgentArgumentsError('Codex', option, 'missingValue')
       }
       if (
         DROPPED_VALUE_OPTIONS.has(option) ||
@@ -106,9 +107,9 @@ export function codexStructuredLaunchArgs(tokens: readonly string[]): string[] {
       continue
     }
     if (!token.startsWith('-')) {
-      throw new Error('Codex structured chat cannot use a positional prompt in Arguments')
+      throw new StructuredAgentArgumentsError('Codex', token, 'positionalPrompt')
     }
-    throw new Error(`Codex structured chat cannot use ${token} in Arguments`)
+    throw new StructuredAgentArgumentsError('Codex', token, 'unsupportedOption')
   }
   return args
 }

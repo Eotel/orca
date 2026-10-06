@@ -42,19 +42,58 @@ function resolverFor(
   value: AgentSessionRecord | null,
   resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
   resolveRollout: () => Promise<string | null> = async () => null,
-  agentDefaultArgs: Record<string, string> = { codex: '' }
+  agentDefaultArgs: Record<string, string> = { codex: '' },
+  resolveLaunchArgs?: () => string[]
 ) {
   return createCodexStructuredLaunchResolver({
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
     resolveRollout,
+    ...(resolveLaunchArgs ? { resolveLaunchArgs } : {}),
     isWindowsProcessStartTimeAvailable: () => true,
     resolvePermissionPolicy: () => codexStructuredPermissionPolicyForSettings({ agentDefaultArgs })
   })
 }
 
 describe('codex structured launch resolution', () => {
+  it.each(['start', 'resume'] as const)(
+    're-reads saved Arguments after a refusal on %s',
+    async (mode) => {
+      let args = ['--remote', 'wss://host']
+      const resolve = resolverFor(
+        record({
+          launchArgs: ['--enable', 'stale'],
+          providerHandleChain:
+            mode === 'resume'
+              ? [
+                  {
+                    linkId: 'link-current',
+                    handle: codexProviderHandle('thread-current'),
+                    origin: 'created',
+                    mintedAtFence: 1,
+                    observedAt: 1
+                  }
+                ]
+              : []
+        }),
+        undefined,
+        undefined,
+        { codex: '' },
+        () => args
+      )
+      await expect(resolve({ identity: IDENTITY })).rejects.toThrow(/Arguments/)
+      args = ['--enable', 'unified_exec']
+      expect((await resolve({ identity: IDENTITY })).args).toEqual([
+        '--enable',
+        'unified_exec',
+        'app-server'
+      ])
+      args = []
+      expect((await resolve({ identity: IDENTITY })).args).toEqual(['app-server'])
+    }
+  )
+
   it('launches the app server in the workspace and account home the record pinned', async () => {
     const launch = await resolverFor(record())({ identity: IDENTITY })
 

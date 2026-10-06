@@ -1,3 +1,5 @@
+import { StructuredAgentArgumentsError } from '../native-chat/structured-agent-arguments-error'
+
 /** Flags supplied by the SDK or owned by Orca's structured transport. */
 const OWNED_FLAGS = new Set([
   'print',
@@ -40,9 +42,13 @@ const SHORT_FLAGS: Record<string, string> = {
   '-v': 'version'
 }
 
-/** Translate a pinned CLI argv into the SDK's `--key [value]` extraArgs shape. */
-export function claudeStructuredExtraArgs(args: readonly string[]): Record<string, string | null> {
+/** Keep variadic directory options in the SDK array; scalar extraArgs cannot retain repetitions. */
+export function claudeStructuredLaunchArgs(args: readonly string[]): {
+  extraArgs: Record<string, string | null>
+  additionalDirectories: string[]
+} {
   const extraArgs: Record<string, string | null> = {}
+  const additionalDirectories: string[] = []
   for (let index = 0; index < args.length; index++) {
     const arg = args[index]!
     if (arg === '--') {
@@ -56,18 +62,24 @@ export function claudeStructuredExtraArgs(args: readonly string[]): Record<strin
       continue
     }
 
-    const inlineValue = separator === -1 ? undefined : arg.slice(separator + 1)
-    const next = args[index + 1]
-    const hasSeparateValue =
-      inlineValue === undefined && next !== undefined && next !== '--' && !next.startsWith('-')
-    if (hasSeparateValue) {
-      index++
+    const values = separator === -1 ? [] : [arg.slice(separator + 1)]
+    while (args[index + 1] !== undefined && !args[index + 1]!.startsWith('-')) {
+      values.push(args[++index]!)
     }
     if (OWNED_FLAGS.has(flag)) {
       continue
     }
-
-    extraArgs[flag] = inlineValue ?? (hasSeparateValue ? next! : null)
+    if (flag === 'add-dir') {
+      if (values.length === 0 || values.some((value) => !value)) {
+        throw new StructuredAgentArgumentsError('Claude', '--add-dir', 'missingValue')
+      }
+      additionalDirectories.push(...values)
+      continue
+    }
+    if (Object.hasOwn(extraArgs, flag) || values.length > 1) {
+      throw new StructuredAgentArgumentsError('Claude', `--${flag}`, 'multipleValues')
+    }
+    extraArgs[flag] = values[0] ?? null
   }
-  return extraArgs
+  return { extraArgs, additionalDirectories }
 }

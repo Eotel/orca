@@ -90,6 +90,13 @@ export type ProviderDiagnostic = {
   audience: ProviderDiagnosticAudience
 }
 
+/** Orca's validated saved Arguments refusal. The option has no value or user-authored operand. */
+export type AgentSessionArgumentProblem = {
+  agent: 'Codex' | 'Claude'
+  option: string
+  problem: 'unsupportedOption' | 'missingValue' | 'multipleValues' | 'positionalPrompt'
+}
+
 /** Stderr can be a whole dump; the row keeps enough to act on. The same cap as the exit reason a
  *  lease record keeps, so a diagnostic never outgrows what the record may store. */
 export const MAX_PROVIDER_DIAGNOSTIC_CHARS = 512
@@ -134,6 +141,8 @@ export type AgentSessionFailureFact = {
   attachment?: AgentSessionAttachmentProblem
   /** On `providerRetrying`: why the provider is retrying. */
   retry?: AgentSessionProviderRetry
+  /** A safe option name from Orca's saved Arguments parser, never an error message. */
+  argumentProblem?: AgentSessionArgumentProblem
 }
 
 /** A fact as a row stores it: its kind may be one a newer host added, so only
@@ -165,6 +174,7 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     refusal?: AgentSessionRefusalReference
     attachment?: AgentSessionAttachmentProblem
     retry?: AgentSessionProviderRetry
+    argumentProblem?: AgentSessionArgumentProblem
   } = {}
 ): AgentSessionFailureFact & { kind: TKind } {
   // Re-bounded here, so no writer can store more than the cap however it built the detail.
@@ -176,7 +186,8 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     ...(detail ? { detail } : {}),
     ...(extra.refusal ? { refusal: extra.refusal } : {}),
     ...(extra.attachment ? { attachment: extra.attachment } : {}),
-    ...(extra.retry ? { retry: extra.retry } : {})
+    ...(extra.retry ? { retry: extra.retry } : {}),
+    ...(extra.argumentProblem ? { argumentProblem: extra.argumentProblem } : {})
   }
 }
 
@@ -206,6 +217,29 @@ function readAttachmentProblem(value: unknown): AgentSessionAttachmentProblem | 
     : { reason }
 }
 
+function readArgumentProblem(value: unknown): AgentSessionArgumentProblem | undefined {
+  if (!isRecord(value)) {
+    return undefined
+  }
+  const agent = value.agent
+  const problem = value.problem
+  const option = value.option
+  if (
+    (agent !== 'Codex' && agent !== 'Claude') ||
+    (problem !== 'unsupportedOption' &&
+      problem !== 'missingValue' &&
+      problem !== 'multipleValues' &&
+      problem !== 'positionalPrompt') ||
+    typeof option !== 'string' ||
+    (problem === 'positionalPrompt'
+      ? option !== 'prompt'
+      : !/^(?:--[a-zA-Z][a-zA-Z0-9-]{0,63}|-[a-zA-Z]|--\?)$/.test(option))
+  ) {
+    return undefined
+  }
+  return { agent, option, problem }
+}
+
 /** A retry as a reader meets it; undefined when it names no field. */
 export function readProviderRetry(value: unknown): AgentSessionProviderRetry | undefined {
   if (!isRecord(value)) {
@@ -233,11 +267,13 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
   const refusal = readAgentSessionRefusalReference(value.refusal)
   const attachment = readAttachmentProblem(value.attachment)
   const retry = readProviderRetry(value.retry)
+  const argumentProblem = readArgumentProblem(value.argumentProblem)
   return agentSessionFailureFact(value.kind, {
     ...(isProviderDiagnostic(value.detail) ? { detail: value.detail } : {}),
     ...(refusal ? { refusal } : {}),
     ...(attachment ? { attachment } : {}),
-    ...(retry ? { retry } : {})
+    ...(retry ? { retry } : {}),
+    ...(argumentProblem ? { argumentProblem } : {})
   })
 }
 

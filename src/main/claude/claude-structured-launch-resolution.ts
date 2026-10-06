@@ -33,7 +33,7 @@ import {
 import { resolveClaudeCommand } from '../codex-cli/command'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
-import { claudeStructuredExtraArgs } from './claude-structured-launch-args'
+import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
@@ -46,6 +46,7 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'settingSources'
   | 'supportedDialogKinds'
   | 'extraArgs'
+  | 'additionalDirectories'
   | 'model'
   | 'effort'
   | 'permissionMode'
@@ -112,6 +113,7 @@ export type ClaudeStructuredLaunch = {
 
 export type ClaudeStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
+  resolveLaunchArgs?: () => Promise<string[]> | string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCommand?: () => string
   resolveEnv?: () =>
@@ -288,7 +290,9 @@ export function createClaudeStructuredLaunchResolver(
           providerSessionId,
           claudeConfigDir: record.accountHome.path
         })))
-    const configuredArgs = claudeStructuredExtraArgs(record.launchArgs ?? [])
+    const configuredArgs = claudeStructuredLaunchArgs(
+      (await deps.resolveLaunchArgs?.()) ?? record.launchArgs ?? []
+    )
     const permission = claudeStructuredPermissionOptions(
       (await deps.resolvePermissionMode?.()) ?? 'default'
     )
@@ -305,8 +309,11 @@ export function createClaudeStructuredLaunchResolver(
       options: {
         ...CLAUDE_STRUCTURED_BASE_OPTIONS,
         ...permission,
+        ...(configuredArgs.additionalDirectories.length
+          ? { additionalDirectories: configuredArgs.additionalDirectories }
+          : {}),
         extraArgs: {
-          ...configuredArgs,
+          ...configuredArgs.extraArgs,
           ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
           ...permission.extraArgs
         },

@@ -19,6 +19,7 @@ import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 
 export type CodexStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
+  resolveLaunchArgs?: () => Promise<string[]> | string[]
   /** Absolute path of a workspace on this host. Rejects when the workspace no
    *  longer resolves, which is the case a stale mobile client hits. */
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
@@ -90,7 +91,9 @@ export function createCodexStructuredLaunchResolver(
       throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)
     }
     const { command, environment } = await resolveCodexStructuredInvocation(deps)
-    const args = codexStructuredLaunchArgs(record.launchArgs ?? [])
+    const args = codexStructuredLaunchArgs(
+      (await deps.resolveLaunchArgs?.()) ?? record.launchArgs ?? []
+    )
     const permissionPolicy = deps.resolvePermissionPolicy?.()
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A Codex record's chain holds only Codex handles; the record store refuses anything else.

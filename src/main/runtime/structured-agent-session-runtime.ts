@@ -258,6 +258,9 @@ async function installOnJournal(
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
       resolveEnvironment: resolveCodexEnvironment,
+      ...(deps.resolveLaunchArgs
+        ? { resolveLaunchArgs: () => deps.resolveLaunchArgs!('codex') }
+        : {}),
       ...(deps.resolveCodexPermissionPolicy
         ? { resolvePermissionPolicy: deps.resolveCodexPermissionPolicy }
         : {}),
@@ -284,6 +287,9 @@ async function installOnJournal(
     ...(deps.resolveClaudeCommand ? { resolveClaudeCommand: deps.resolveClaudeCommand } : {}),
     ...(deps.resolveClaudeLaunchEnv ? { resolveClaudeLaunchEnv: deps.resolveClaudeLaunchEnv } : {}),
     resolveClaudeInheritedEnv,
+    ...(deps.resolveLaunchArgs
+      ? { resolveClaudeLaunchArgs: () => deps.resolveLaunchArgs!('claude') }
+      : {}),
     resolveClaudeAuthPolicy: deps.resolveClaudeAuthPolicy,
     ...(deps.resolveClaudePermissionMode
       ? { resolveClaudePermissionMode: deps.resolveClaudePermissionMode }
@@ -315,12 +321,6 @@ async function installOnJournal(
     claimKeyId: deps.claimKeyId,
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
-    ...(deps.resolveLaunchArgs
-      ? {
-          resolveLaunchArgs: async (provider: AgentSessionRecord['provider']) =>
-            await deps.resolveLaunchArgs!(provider)
-        }
-      : {}),
     logger: deps.logger,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),

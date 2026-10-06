@@ -60,7 +60,8 @@ function resolverFor(
   stripAuthEnv = false,
   // Manual by default so a test that is not about permissions is not silently about them.
   agentDefaultArgs: Record<string, string> = { claude: '' },
-  hasTranscript: () => Promise<boolean> = async () => true
+  hasTranscript: () => Promise<boolean> = async () => true,
+  resolveLaunchArgs?: () => string[]
 ) {
   return createClaudeStructuredLaunchResolver({
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
@@ -69,6 +70,7 @@ function resolverFor(
     resolveAuthPolicy: () => ({ stripAuthEnv }),
     resolvePermissionMode: () => claudeStructuredPermissionModeForSettings({ agentDefaultArgs }),
     hasTranscript,
+    ...(resolveLaunchArgs ? { resolveLaunchArgs } : {}),
     ...(resolveEnv ? { resolveEnv } : {})
   })
 }
@@ -312,12 +314,48 @@ describe('claude structured launch resolution', () => {
     expect(launch.options.sessionId).toBe(launch.providerSessionId)
   })
 
+  it('re-reads saved Arguments after a refusal and on resume instead of using a stale record', async () => {
+    let args = ['--model', 'one', '--model', 'two']
+    const resolve = resolverFor(
+      record({ ...RESUMABLE, launchArgs: ['--model', 'stale'] }),
+      undefined,
+      false,
+      { claude: '' },
+      async () => true,
+      () => args
+    )
+    await expect(resolve({ identity: identityAt('leaf-current') })).rejects.toThrow(/Arguments/)
+    args = ['--effort', 'high']
+    expect((await resolve({ identity: identityAt('leaf-current') })).options.extraArgs).toEqual({
+      effort: 'high',
+      'replay-user-messages': null
+    })
+    args = []
+    expect((await resolve({ identity: identityAt('leaf-current') })).options.extraArgs).toEqual({
+      'replay-user-messages': null
+    })
+  })
+
   it('passes configured arguments when resuming a transcript', async () => {
     const launch = await resolverFor(
-      record({ ...RESUMABLE, launchArgs: ['--effort', 'high', '-r', 'wrong-session'] })
+      record({
+        ...RESUMABLE,
+        launchArgs: [
+          '--effort',
+          'high',
+          '-r',
+          'wrong-session',
+          '--add-dir',
+          '/one',
+          '/two',
+          '--add-dir',
+          '/three'
+        ]
+      })
     )({ identity: identityAt('leaf-current') })
 
     expect(launch.options.resume).toBe('provider-current')
+    expect(launch.options.additionalDirectories).toEqual(['/one', '/two', '/three'])
     expect(launch.options.extraArgs).toEqual({
       effort: 'high',
       'replay-user-messages': null

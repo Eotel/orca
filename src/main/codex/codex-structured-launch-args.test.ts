@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
+import { StructuredAgentArgumentsError } from '../native-chat/structured-agent-arguments-error'
 
 describe('codexStructuredLaunchArgs', () => {
   it('preserves root config and feature option order', () => {
@@ -71,14 +72,32 @@ describe('codexStructuredLaunchArgs', () => {
   })
 
   it.each([
-    { tokens: ['a prompt'] },
-    { tokens: ['app-server'] },
-    { tokens: ['--remote', 'wss://host'] },
-    { tokens: ['--remote=wss://host'] },
-    { tokens: ['--remote-auth-token-env', 'TOKEN'] },
-    { tokens: ['--unknown-flag'] },
-    { tokens: ['--enable'] }
-  ])('rejects unsafe or incomplete arguments: %j', ({ tokens }) => {
-    expect(() => codexStructuredLaunchArgs(tokens)).toThrow()
+    { tokens: ['a private prompt'], option: 'prompt', problem: 'positionalPrompt' },
+    { tokens: ['app-server'], option: 'prompt', problem: 'positionalPrompt' },
+    {
+      tokens: ['--remote', 'wss://private-host'],
+      option: '--remote',
+      problem: 'unsupportedOption'
+    },
+    { tokens: ['--remote=wss://private-host'], option: '--remote', problem: 'unsupportedOption' },
+    {
+      tokens: ['--remote-auth-token-env', 'PRIVATE_TOKEN'],
+      option: '--remote-auth-token-env',
+      problem: 'unsupportedOption'
+    },
+    { tokens: ['--unknown-flag=secret'], option: '--unknown-flag', problem: 'unsupportedOption' },
+    { tokens: ['--enable'], option: '--enable', problem: 'missingValue' }
+  ] as const)('rejects unsafe or incomplete arguments: %j', ({ tokens, option, problem }) => {
+    const thrown = () => codexStructuredLaunchArgs(tokens)
+    expect(thrown).toThrow(StructuredAgentArgumentsError)
+    try {
+      thrown()
+    } catch (error) {
+      expect(error).toMatchObject({
+        argumentProblem: { agent: 'Codex', option, problem }
+      })
+      expect(JSON.stringify(error)).not.toContain('secret')
+      expect(JSON.stringify(error)).not.toContain('private')
+    }
   })
 })

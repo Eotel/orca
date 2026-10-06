@@ -348,7 +348,11 @@ describe('Claude Agent SDK contract pins', () => {
       '--dangerously-skip-permissions',
       '--output-format',
       'text',
-      '--session-id=wrong-session'
+      '--session-id=wrong-session',
+      '--add-dir',
+      '/repo/one',
+      '/repo/two',
+      '--add-dir=/repo/three'
     ])
     await drainQuery({
       ...launch.options,
@@ -367,6 +371,11 @@ describe('Claude Agent SDK contract pins', () => {
     expect(argv).not.toContain('--allow-dangerously-skip-permissions')
     expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('default')
     expect(argv[argv.indexOf('--model') + 1]).toBe('claude-sonnet-4-5')
+    expect(argv.flatMap((arg, index) => (arg === '--add-dir' ? [argv[index + 1]] : []))).toEqual([
+      '/repo/one',
+      '/repo/two',
+      '/repo/three'
+    ])
     expect(argv.filter((arg) => arg === '--model')).toHaveLength(1)
     expect(argv.filter((arg) => arg === '--output-format')).toHaveLength(1)
     expect(argv[argv.indexOf('--output-format') + 1]).toBe('stream-json')

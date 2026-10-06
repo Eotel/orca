@@ -1710,10 +1710,15 @@ export function notifyWorktreeHeadIdentitiesChanged(
 export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating',
-  creationId?: string
+  creationId?: string,
+  worktreeId?: string
 ): void {
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('createWorktree:progress', { creationId, phase })
+    mainWindow.webContents.send('createWorktree:progress', {
+      creationId,
+      phase,
+      ...(worktreeId ? { worktreeId } : {})
+    })
   }
 }
 
@@ -2607,7 +2612,7 @@ async function performLocalWorktreeCreate(
       await legacyFetchPromise
     })
   }
-  emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId)
+  emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId, `${repo.id}::${worktreePath}`)
 
   // Why: defer the remote add + fetch to first push/pull/fetch/fast-forward
   // (#17828) instead of paying it at create time for a read-only review.

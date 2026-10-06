@@ -88,5 +88,8 @@ arrives; a full wrapper can overflow macOS's 1024-byte canonical PTY input buffe
 submit byte. Setup environment variables must survive runtime provisioning, renderer activation,
 and fallback retries for both tabs and splits. Native Windows gates retain their existing launcher.
 
-WSL worktrees and non-Windows platforms are unaffected: they always use the bash runner. SSH hosts
+WSL PTYs register `ORCA_SEQUENCED_SETUP_SCRIPT/u` in `WSLENV` so the script crosses from Windows
+into Linux without path translation.
+
+WSL worktrees and non-Windows platforms always use the bash runner. SSH hosts
 choose their runner from the remote path format, never from local Windows preferences.

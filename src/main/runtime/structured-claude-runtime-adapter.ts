@@ -22,7 +22,7 @@ import { ClaudeAtRestCommandCatalog } from '../claude/claude-at-rest-commands'
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  resolveClaudeLaunchArgs?: () => Promise<string[]> | string[]
+  resolveClaudeLaunchArgs: () => Promise<string[]> | string[]
   resolveClaudeCommand?: () => string
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
   /** The env a Claude child inherits before auth stripping; absent inherits Orca's own. */
@@ -84,7 +84,7 @@ export function createStructuredClaudeRuntimeAdapter(
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
-      resolveLaunchArgs: deps.resolveClaudeLaunchArgs ?? (() => []),
+      resolveLaunchArgs: deps.resolveClaudeLaunchArgs,
       resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),
       ...(deps.resolveClaudeInheritedEnv

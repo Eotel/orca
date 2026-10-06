@@ -249,6 +249,7 @@ beforeEach(async () => {
         // Hermetic: never the developer's real login shell.
         resolveEnvironment: async () => shellEnv,
         resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
+        resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => claudeAuthPolicy,
         openClaudeConnection: claude.openConnection,
         // Production's sink wiring onto a real hook server, whose records a Stop reaches.

@@ -27,9 +27,7 @@ import type { RpcContext } from '../core'
 import { structuredCallerFor } from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 import { commitStructuredAgentSessionLaunchPrompt } from './agent-launch-structured-prompt'
-import {
-  deliverTerminalAgentLaunchPrompt
-} from './agent-launch-terminal-prompt'
+import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { readsUnconfirmedLaunchPrompt } from './agent-launch-replay'
 import { proveCarriedTerminalAgentLaunchPrompt } from './agent-launch-carried-prompt-proof'
 import { HANDED_TO_TERMINAL } from '../../../agent-launch/agent-launch-prompt-delivery'

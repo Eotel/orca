@@ -110,6 +110,10 @@ function isExitProvenAcquisitionFailure(error: unknown): error is Error {
 function failedAcquisitionDetails(
   error: unknown
 ): AgentSessionRefusalDetailsByCode['agent_session_operation_invalid'] | undefined {
+  const argumentProblem = argumentProblemOf(error)
+  if (argumentProblem) {
+    return { reason: 'attachFailed', argumentProblem }
+  }
   if (error instanceof AgentSessionAcquisitionRefusal) {
     return { reason: error.reason }
   }
@@ -129,7 +133,11 @@ export function failedAcquisitionRefusal(
   wording: FailedAcquisitionWording
 ): { ok: false; refusal: AgentSessionWireRefusal } | null {
   // A proven exit is a settled failure, answered in the shape its ledger row replays.
-  if (error instanceof AgentSessionAcquisitionRefusal || isExitProvenAcquisitionFailure(error)) {
+  if (
+    error instanceof AgentSessionAcquisitionRefusal ||
+    isExitProvenAcquisitionFailure(error) ||
+    (isAgentSessionPreSpawnError(error) && argumentProblemOf(error))
+  ) {
     return {
       ok: false,
       refusal: failedAcquisitionWireRefusal(failedAcquisitionDetails(error), wording, error)

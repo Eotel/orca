@@ -99,12 +99,15 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
     onAttached: () => {}
   }
   const first = await performAttach(input).then(
-    () => null,
+    (result) => result,
     (error: unknown) => error
   )
-  expect(first).toBeInstanceOf(AgentSessionPreSpawnError)
+  if (first instanceof Error) {
+    expect(first).toBeInstanceOf(AgentSessionPreSpawnError)
+  }
   return {
-    first: mapRuntimeError('req-1', { runtimeId: 'runtime-1' }, first),
+    first:
+      first instanceof Error ? mapRuntimeError('req-1', { runtimeId: 'runtime-1' }, first) : first,
     replay: await performAttach(input)
   }
 }
@@ -118,8 +121,18 @@ describe('a create that fails before any process spawns', () => {
     )
     const sentence =
       "Claude couldn't start. Saved Arguments give --model more than one value. Edit them in Settings > Agents > Arguments. Send your message to try again."
-    expect(first).toMatchObject({ ok: false, error: { message: sentence } })
-    expect(replay).toMatchObject({ ok: false, refusal: { message: sentence } })
+    for (const result of [first, replay]) {
+      expect(result).toMatchObject({
+        ok: false,
+        refusal: {
+          message: sentence,
+          details: {
+            reason: 'attachFailed',
+            argumentProblem: { agent: 'Claude', option: '--model', problem: 'multipleValues' }
+          }
+        }
+      })
+    }
     expect(JSON.stringify([first, replay])).not.toContain('private')
   })
 

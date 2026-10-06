@@ -6,6 +6,12 @@
 // value the provider wrote — never recovered from a string afterwards, since by then nothing can
 // tell a provider's sentence from Orca's.
 
+import {
+  readAgentSessionArgumentProblem,
+  type AgentSessionArgumentProblem
+} from './agent-session-argument-problem'
+export type { AgentSessionArgumentProblem } from './agent-session-argument-problem'
+
 import { structuralValuesEqualIgnoringUndefined } from './structural-value-equality'
 import {
   readAgentSessionRefusalReference,
@@ -88,13 +94,6 @@ export type ProviderDiagnosticAudience = 'person' | 'log'
 export type ProviderDiagnostic = {
   text: string
   audience: ProviderDiagnosticAudience
-}
-
-/** Orca's validated saved Arguments refusal. The option has no value or user-authored operand. */
-export type AgentSessionArgumentProblem = {
-  agent: 'Codex' | 'Claude'
-  option: string
-  problem: 'unsupportedOption' | 'missingValue' | 'multipleValues' | 'positionalPrompt'
 }
 
 /** Stderr can be a whole dump; the row keeps enough to act on. The same cap as the exit reason a
@@ -217,29 +216,6 @@ function readAttachmentProblem(value: unknown): AgentSessionAttachmentProblem | 
     : { reason }
 }
 
-function readArgumentProblem(value: unknown): AgentSessionArgumentProblem | undefined {
-  if (!isRecord(value)) {
-    return undefined
-  }
-  const agent = value.agent
-  const problem = value.problem
-  const option = value.option
-  if (
-    (agent !== 'Codex' && agent !== 'Claude') ||
-    (problem !== 'unsupportedOption' &&
-      problem !== 'missingValue' &&
-      problem !== 'multipleValues' &&
-      problem !== 'positionalPrompt') ||
-    typeof option !== 'string' ||
-    (problem === 'positionalPrompt'
-      ? option !== 'prompt'
-      : !/^(?:--[a-zA-Z][a-zA-Z0-9-]{0,63}|-[a-zA-Z]|--\?)$/.test(option))
-  ) {
-    return undefined
-  }
-  return { agent, option, problem }
-}
-
 /** A retry as a reader meets it; undefined when it names no field. */
 export function readProviderRetry(value: unknown): AgentSessionProviderRetry | undefined {
   if (!isRecord(value)) {
@@ -267,7 +243,7 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
   const refusal = readAgentSessionRefusalReference(value.refusal)
   const attachment = readAttachmentProblem(value.attachment)
   const retry = readProviderRetry(value.retry)
-  const argumentProblem = readArgumentProblem(value.argumentProblem)
+  const argumentProblem = readAgentSessionArgumentProblem(value.argumentProblem)
   return agentSessionFailureFact(value.kind, {
     ...(isProviderDiagnostic(value.detail) ? { detail: value.detail } : {}),
     ...(refusal ? { refusal } : {}),

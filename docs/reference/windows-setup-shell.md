@@ -82,5 +82,11 @@ agent startup command for itself, so a `.cmd` runner launched from a Git Bash pa
 bash gate — PowerShell's `Invoke-Expression` cannot parse POSIX `'\''` escaping. The gate wraps the
 same `ProcessStartInfo` launcher, so the batch runner is never handed to bash.
 
+POSIX setup and startup gates keep their full scripts in the respective terminal's environment
+and submit only a short launch command. Shell profiles may still be loading when the command
+arrives; a full wrapper can overflow macOS's 1024-byte canonical PTY input buffer and lose its
+submit byte. Setup environment variables must survive runtime provisioning, renderer activation,
+and fallback retries for both tabs and splits. Native Windows gates retain their existing launcher.
+
 WSL worktrees and non-Windows platforms are unaffected: they always use the bash runner. SSH hosts
 choose their runner from the remote path format, never from local Windows preferences.

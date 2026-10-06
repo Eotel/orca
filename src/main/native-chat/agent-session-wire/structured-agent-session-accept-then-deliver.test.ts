@@ -48,6 +48,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -79,6 +80,7 @@ const spawnChild: StructuredAgentSessionAdapter['acquire'] = async ({ fence, spa
 
 async function startHost(): Promise<void> {
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {

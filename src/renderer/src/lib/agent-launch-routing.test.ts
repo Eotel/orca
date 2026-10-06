@@ -187,7 +187,7 @@ describe('resolveAgentLaunchRoute', () => {
       false
     )
     expect(
-      hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: 'codex-nightly' } }, 'codex')
+      hasExplicitTuiLaunchCommand({ agentCmdOverrides: { codex: 'npx codex' } }, 'codex')
     ).toBe(true)
   })
 })

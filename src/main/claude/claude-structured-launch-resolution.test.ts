@@ -289,18 +289,39 @@ describe('claude structured launch resolution', () => {
     }
   )
 
-  // The configured CLI arguments are a terminal concern: a durable record written before they
-  // stopped being read must not smuggle one back into the child.
-  it("ignores the record's durable launch arguments", async () => {
+  it('passes configured arguments on start without taking over permission or session flags', async () => {
     const launch = await resolverFor(
       record({
-        launchArgs: ['--model', 'claude-sonnet-4-5', '--dangerously-skip-permissions']
+        launchArgs: [
+          '--model',
+          'claude-sonnet-4-5',
+          '--dangerously-skip-permissions',
+          '--resume=wrong-session',
+          '--permission-mode',
+          'bypassPermissions'
+        ]
       })
     )({ identity: IDENTITY })
 
     expect(launch.options.model).toBeUndefined()
-    expect(launch.options.extraArgs).toEqual({ 'replay-user-messages': null })
+    expect(launch.options.extraArgs).toEqual({
+      model: 'claude-sonnet-4-5',
+      'replay-user-messages': null
+    })
     expect(launch.options.permissionMode).toBeUndefined()
+    expect(launch.options.sessionId).toBe(launch.providerSessionId)
+  })
+
+  it('passes configured arguments when resuming a transcript', async () => {
+    const launch = await resolverFor(
+      record({ ...RESUMABLE, launchArgs: ['--effort', 'high', '-r', 'wrong-session'] })
+    )({ identity: identityAt('leaf-current') })
+
+    expect(launch.options.resume).toBe('provider-current')
+    expect(launch.options.extraArgs).toEqual({
+      effort: 'high',
+      'replay-user-messages': null
+    })
   })
 
   it('keeps the session launch environment pinned after account settings change', async () => {

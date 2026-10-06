@@ -33,6 +33,7 @@ import {
 import { resolveClaudeCommand } from '../codex-cli/command'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
+import { claudeStructuredExtraArgs } from './claude-structured-launch-args'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
@@ -287,8 +288,7 @@ export function createClaudeStructuredLaunchResolver(
           providerSessionId,
           claudeConfigDir: record.accountHome.path
         })))
-    // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
-    // concern, and the permission mode they used to smuggle in is an owned provider option now.
+    const configuredArgs = claudeStructuredExtraArgs(record.launchArgs ?? [])
     const permission = claudeStructuredPermissionOptions(
       (await deps.resolvePermissionMode?.()) ?? 'default'
     )
@@ -305,7 +305,11 @@ export function createClaudeStructuredLaunchResolver(
       options: {
         ...CLAUDE_STRUCTURED_BASE_OPTIONS,
         ...permission,
-        extraArgs: { ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs, ...permission.extraArgs },
+        extraArgs: {
+          ...configuredArgs,
+          ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
+          ...permission.extraArgs
+        },
         // Claude owns where a resumed conversation continues; the stored leaf is Orca's bookkeeping.
         ...(resumesTranscript ? { resume: providerSessionId } : { sessionId: providerSessionId })
       },

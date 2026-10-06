@@ -87,11 +87,34 @@ describe('resolveStructuredAgentSessionCreateSupport', () => {
       expect(
         support({
           agent,
-          getSettings: () => ({ ...HOST_SELECTED, agentCmdOverrides: { [agent]: 'wrapper' } })
+          getSettings: () => ({ ...HOST_SELECTED, agentCmdOverrides: { [agent]: 'wrapper --arg' } })
         })
       ).toEqual({ supported: false, reason: 'agent' })
     }
   )
+
+  it.each(['claude', 'codex'] as const)(
+    'supports %s with a verified executable override',
+    (agent) => {
+      expect(
+        support({
+          agent,
+          getSettings: () => ({
+            ...HOST_SELECTED,
+            agentCmdOverrides: { [agent]: `"${process.execPath}"` }
+          })
+        })
+      ).toEqual({ supported: true })
+    }
+  )
+
+  it('refuses a missing executable on the execution host', () => {
+    expect(
+      support({
+        getSettings: () => ({ ...HOST_SELECTED, agentCmdOverrides: { claude: '/missing/claude' } })
+      })
+    ).toEqual({ supported: false, reason: 'agent' })
+  })
 
   it('ignores a blank launch command override', () => {
     expect(

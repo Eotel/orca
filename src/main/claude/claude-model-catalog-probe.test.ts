@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createClaudeModelCatalogProbe } from './claude-model-catalog-probe'
 import { resolveClaudeStructuredInvocation } from './claude-structured-launch-resolution'
 import type { discoverModelsLocal } from '../text-generation/commit-message-model-discovery'
+import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
 import type {
   SpawnedSourceControlAgentProcess,
   SpawnSourceControlAgent
@@ -21,7 +22,10 @@ function probeDeps(): {
   resolveAuthPolicy: () => typeof AUTH_POLICY
 } {
   return {
-    resolveCommand: () => '/resolved/claude with spaces/claude',
+    resolveCommand: () =>
+      resolveStructuredAgentCommand('claude', {
+        agentCmdOverrides: { claude: `"${process.execPath}"` }
+      }),
     resolveEnv: () => ({ ANTHROPIC_MODEL_GATEWAY: 'https://gateway.example' }),
     resolveInheritedEnv: async () => ({ PATH: '/resolved/bin', HOME: '/homes/user' }),
     resolveAuthPolicy: () => AUTH_POLICY

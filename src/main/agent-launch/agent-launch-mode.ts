@@ -32,7 +32,7 @@ import {
   type StructuredNativeChatBlocker
 } from '../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
+import { requiresTuiAgentLaunchCommand } from '../native-chat/structured-agent-command-resolution'
 import type { WorkspaceLaunchKind } from '../../shared/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
@@ -160,7 +160,7 @@ export function decideAgentLaunchMode(args: {
     // when it names somewhere other than the workspace root, by the same shared rule.
     requiresTuiLaunchCommand:
       requestsCwdOutsideWorkspaceRoot(placement.workspacePath, placement.cwd) ||
-      hasExplicitTuiLaunchCommand(settings, agent)
+      requiresTuiAgentLaunchCommand(settings, agent)
   })
   if (!support.supported) {
     return downgraded(BLOCKER_REASON[support.blocker], vocabulary)

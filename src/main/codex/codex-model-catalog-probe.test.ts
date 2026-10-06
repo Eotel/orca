@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createCodexModelCatalogProbe } from './codex-model-catalog-probe'
 import { resolveCodexStructuredInvocation } from './codex-structured-launch-resolution'
 import { runCodexAppServerSession, type CodexAppServerInvocation } from './codex-app-server-session'
+import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
 
 const MODEL_ROW = {
   model: 'gpt-live',
@@ -23,7 +24,13 @@ describe('codex model catalog probe', () => {
     const resolveCommand = vi.fn((options?: { pathEnv?: string | null; homePath?: string }) => {
       expect(options?.pathEnv).toBe('/resolved/bin')
       expect(options?.homePath).toBe('/homes/user')
-      return '/resolved/bin/codex'
+      return resolveStructuredAgentCommand(
+        'codex',
+        {
+          agentCmdOverrides: { codex: `"${process.execPath}"` }
+        },
+        options
+      )
     })
     const invocations: CodexAppServerInvocation[] = []
     const probe = createCodexModelCatalogProbe({

@@ -1,7 +1,7 @@
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
+import { requiresTuiAgentLaunchCommand } from './structured-agent-command-resolution'
 import {
   readClaudeManagedAccountGateSettings,
   structuredClaudeMatchesActiveManagedAccount,
@@ -23,7 +23,7 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
   location: AgentSessionExecutionLocation
   adapterSupportsCreate: boolean
   getSettings: () => ClaudeManagedAccountGateSettings &
-    Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>
+    Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>>
 }): StructuredAgentSessionCreateSupport {
   if (!input.adapterSupportsCreate) {
     return {
@@ -38,7 +38,7 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
   }
   // This host's own launch command override names a process only a terminal runs, whichever
   // client asked; a client routes on its own override for its own machine only.
-  if (hasExplicitTuiLaunchCommand(readSettingsOrNull(input.getSettings), input.agent)) {
+  if (requiresTuiAgentLaunchCommand(readSettingsOrNull(input.getSettings), input.agent)) {
     return { supported: false, reason: 'agent' }
   }
   // Claude only: Codex resolves its account on a different path, so its answer is untouched here.

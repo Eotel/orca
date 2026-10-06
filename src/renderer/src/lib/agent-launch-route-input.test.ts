@@ -250,7 +250,7 @@ describe('buildAgentLaunchRouteInput', () => {
 
   it.each([
     ['a cwd', { cwd: '/repo/sub' }, {}],
-    ['a settings command override', {}, { agentCmdOverrides: { codex: 'codex-nightly' } }]
+    ['a shell command override', {}, { agentCmdOverrides: { codex: 'npx codex' } }]
   ] as const)('requires a terminal for %s', (_name, tuiCustomization, settingsOverride) => {
     const input = buildAgentLaunchRouteInput(
       store({ ...STRUCTURED_SETTINGS, ...settingsOverride }),
@@ -262,6 +262,17 @@ describe('buildAgentLaunchRouteInput', () => {
     )
     expect(input.requiresTuiLaunchCommand).toBe(true)
   })
+
+  it.each(['claude', 'codex'] as const)(
+    'lets the host verify a single %s executable override',
+    (agent) => {
+      const input = buildAgentLaunchRouteInput(
+        store({ ...STRUCTURED_SETTINGS, agentCmdOverrides: { [agent]: 'agent-nightly' } }),
+        { agent, workspace: { kind: 'git-worktree', worktreeId: 'wt-1' } }
+      )
+      expect(input.requiresTuiLaunchCommand).toBe(false)
+    }
+  )
 
   // The reported P0: `--dangerously-skip-permissions --model Opus` matched no blessed string, so
   // every new Claude tab was silently demoted to the terminal-backed chat. The Arguments field is

@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 
 import {
   buildSearchBaseRefsArgv,
@@ -179,7 +180,7 @@ describe('searchBaseRefs (widened glob)', () => {
 
     const results = await searchBaseRefs(tmpDir, 'login')
 
-    expect(results).toContain('feature/login')
+    expect(results).toContain('refs/heads/feature/login')
   })
 
   it('finds a local slashed branch when the query lands in an ancestor segment', async () => {
@@ -187,7 +188,7 @@ describe('searchBaseRefs (widened glob)', () => {
 
     const results = await searchBaseRefs(tmpDir, 'feature')
 
-    expect(results).toContain('feature/login')
+    expect(results).toContain('refs/heads/feature/login')
   })
 
   it('finds a remote slashed branch when the query lands in a deep segment', async () => {
@@ -227,7 +228,7 @@ describe('searchBaseRefs (widened glob)', () => {
     const results = await searchBaseRefDetails(tmpDir, 'feature/something')
 
     expect(results).toContainEqual({
-      refName: 'feature/something',
+      refName: 'refs/heads/feature/something',
       localBranchName: 'feature/something'
     })
   })
@@ -283,7 +284,7 @@ describe('searchBaseRefs (widened glob)', () => {
     )
 
     expect(results).toEqual([
-      { refName: literal, localBranchName: literal },
+      { refName: `refs/heads/${literal}`, localBranchName: literal },
       {
         refName: `refs/heads/${fullyQualifiedLiteral}`,
         localBranchName: fullyQualifiedLiteral
@@ -340,6 +341,81 @@ describe('searchBaseRefs (widened glob)', () => {
       git(tmpDir, ['worktree', 'prune'])
     }
   })
+
+  it.each(['feature./valid', 'feature./运动记录', 'feature./加'])(
+    'keeps valid dotted components searchable: %s',
+    async (branch) => {
+      const sha = getHeadSha(tmpDir)
+      git(tmpDir, ['branch', branch])
+      git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+      createRemoteRef(tmpDir, `origin/${branch}`, sha)
+      const results = await searchBaseRefDetails(tmpDir, branch)
+      expect(results).toHaveLength(2)
+      expect(results.every(({ localBranchName }) => localBranchName === branch)).toBe(true)
+      expect(
+        results.map(({ refName }) => git(tmpDir, ['rev-parse', '--verify', refName]).trim())
+      ).toEqual([sha, sha])
+    }
+  )
+
+  it.each([true, false])(
+    'keeps colliding local and remote selectors distinct in loose mode with configured remote %s',
+    async (configured) => {
+      const branch = 'origin/feature'
+      const localSha = getHeadSha(tmpDir)
+      git(tmpDir, ['branch', branch])
+      if (configured) {
+        git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+      }
+      git(tmpDir, ['commit', '--allow-empty', '-m', 'remote target', '--quiet'])
+      const remoteSha = getHeadSha(tmpDir)
+      createRemoteRef(tmpDir, branch, remoteSha)
+      git(tmpDir, ['config', 'core.warnAmbiguousRefs', 'false'])
+      const results = await searchBaseRefDetails(tmpDir, branch)
+      expect(results).toContainEqual({ refName: `refs/heads/${branch}`, localBranchName: branch })
+      for (const result of results) {
+        const base = await resolveWorktreeAddBaseRef(result.refName, async (ref) => {
+          try {
+            git(tmpDir, ['rev-parse', '--verify', ref])
+            return true
+          } catch {
+            return false
+          }
+        })
+        expect(git(tmpDir, ['rev-parse', '--verify', base]).trim()).toBe(
+          result.localBranchName === branch ? localSha : remoteSha
+        )
+      }
+    }
+  )
+
+  it.each(['branch', 'tag'])(
+    'preserves a nested remote HEAD against a colliding %s',
+    async (kind) => {
+      const remoteSha = getHeadSha(tmpDir)
+      git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+      createRemoteRef(tmpDir, 'origin/feature/HEAD', remoteSha)
+      git(tmpDir, ['commit', '--allow-empty', '-m', 'collision target', '--quiet'])
+      git(tmpDir, [kind, 'origin/feature/HEAD'])
+      const results = await searchBaseRefDetails(tmpDir, 'feature/HEAD')
+      expect(results).toContainEqual({
+        refName: 'refs/remotes/origin/feature/HEAD',
+        localBranchName: 'feature/HEAD'
+      })
+      expect(
+        git(tmpDir, ['rev-parse', '--verify', 'refs/remotes/origin/feature/HEAD']).trim()
+      ).toBe(remoteSha)
+    }
+  )
+
+  it.each(['refs/heads/topic', 'refs/remotes/origin/topic'])(
+    'preserves the local namespace for a branch named %s',
+    async (branch) => {
+      git(tmpDir, ['branch', branch])
+      const results = await searchBaseRefDetails(tmpDir, branch)
+      expect(results).toEqual([{ refName: `refs/heads/${branch}`, localBranchName: branch }])
+    }
+  )
 
   it('returns distinct resolvable names for real colliding Unicode refs', async () => {
     const branch = 'origin/运动记录及预约详情页优化'
@@ -596,7 +672,11 @@ describe('searchBaseRefs (widened glob)', () => {
 
     const results = await searchBaseRefs(tmpDir, 'feature/HEAD')
 
-    expect(results).toContain('upstream/feature/HEAD')
+    const nestedRef = results.find(
+      (ref) => ref.endsWith('/upstream/feature/HEAD') || ref === 'upstream/feature/HEAD'
+    )
+    expect(nestedRef).toBeDefined()
+    expect(git(tmpDir, ['rev-parse', '--verify', nestedRef ?? '']).trim()).toBe(sha)
     expect(results).not.toContain('upstream/HEAD')
   })
 
@@ -712,7 +792,7 @@ describe('searchBaseRefs (widened glob)', () => {
 
     const results = await searchBaseRefs(tmpDir, 'plan/unified-brainstorm-plan-docs')
 
-    expect(results).toContain('plan/unified-brainstorm-plan-docs')
+    expect(results).toContain('refs/heads/plan/unified-brainstorm-plan-docs')
   })
 })
 

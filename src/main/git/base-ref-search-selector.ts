@@ -11,16 +11,12 @@ export function resolveBaseRefSearchSelector(fullRef: string, shortRef: string):
   const naturalName = parts[2]
   // Full selectors preserve identity when Git disambiguates or corrupts a short name.
   if (shortRef === namespaceName || ![fullRef, namespaceName, naturalName].includes(shortRef)) {
-    // Git can shorten a nested remote branch ending in /HEAD via its DWIM rules.
-    if (
-      parts[1] === 'remotes' &&
-      naturalName.endsWith('/HEAD') &&
-      shortRef === naturalName.slice(0, -'/HEAD'.length)
-    ) {
-      return naturalName
-    }
     return fullRef
   }
-  // A remote named refs/heads must not impersonate a fully qualified local selector.
-  return parts[1] === 'remotes' && shortRef.startsWith('refs/heads/') ? fullRef : shortRef
+  // Slash-named locals can collide with remote-tracking refs even without a configured remote.
+  if (parts[1] === 'heads' && naturalName.includes('/')) {
+    return fullRef
+  }
+  // Natural names beginning with refs/ must not impersonate another namespace.
+  return shortRef.startsWith('refs/') ? fullRef : shortRef
 }

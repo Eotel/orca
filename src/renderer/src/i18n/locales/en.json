@@ -18079,6 +18079,7 @@
         "groupTasks": "Tasks"
       },
       "jumpToLatest": "Jump to latest",
+      "jumpToTop": "Jump to top",
       "transcriptLabel": "Conversation",
       "toggle": {
         "showTerminal": "Show terminal",

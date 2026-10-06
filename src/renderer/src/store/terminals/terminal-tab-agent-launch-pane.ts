@@ -5,7 +5,7 @@ export function createTerminalTabAgentLaunchPaneActions(
   set: TerminalStoreSet
 ): Pick<TerminalSlice, 'setTabAgentLaunchPane'> {
   return {
-    setTabAgentLaunchPane: (tabId, launchPane) => {
+    setTabAgentLaunchPane: (tabId, launchPane, options) => {
       set((s) => {
         const next = { ...s.tabsByWorktree }
         for (const wId of Object.keys(next)) {
@@ -18,7 +18,11 @@ export function createTerminalTabAgentLaunchPaneActions(
             }
             const { agentLaunchPane: _previous, ...rest } = t
             void _previous
-            return launchPane ? { ...rest, agentLaunchPane: launchPane } : rest
+            // The proven remount seam: live PTYs detach and reattach; a refused pane spawns afresh.
+            const remounted = options?.remount
+              ? { ...rest, generation: (t.generation ?? 0) + 1 }
+              : rest
+            return launchPane ? { ...remounted, agentLaunchPane: launchPane } : remounted
           })
         }
         return { tabsByWorktree: next }

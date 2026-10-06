@@ -132,6 +132,11 @@ describe('a new-tab prompt the host delivers', () => {
       launch({ kind: 'not-delivered', agentExited: false }).promptDeliveryResult
     ).resolves.toEqual({ delivered: false, failureNotified: true })
     expect(notices.showAgentLaunchPromptNotDeliveredNotice).not.toHaveBeenCalled()
+
+    // The host refusing the launch because the user closed its tab is the same close.
+    await launch({ kind: 'not-started', unconfirmed: false, code: 'agent_launch_tab_closed' })
+      .promptDeliveryResult
+    expect(notices.showAgentLaunchOutcomeNotice).not.toHaveBeenCalled()
   })
 
   it("seeds the chat's copy only for a prompt the host never puts in a launch file", () => {

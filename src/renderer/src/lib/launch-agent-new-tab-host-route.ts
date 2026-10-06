@@ -11,6 +11,7 @@ import {
   type HostAgentLaunchArgs,
   type HostAgentLaunchDelivery
 } from '@/lib/agent-launch-through-host'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
@@ -53,11 +54,12 @@ function settleNewTabHostDelivery(
 ): { delivered: boolean; failureNotified: boolean } {
   const { agent, prompt } = args
   const userClosedTab =
-    delivery.kind !== 'not-started' &&
-    args.tabId !== null &&
-    !(useAppStore.getState().tabsByWorktree[args.worktreeId] ?? []).some(
-      (tab) => tab.id === args.tabId
-    )
+    delivery.kind === 'not-started'
+      ? delivery.code === AGENT_LAUNCH_TAB_CLOSED_CODE
+      : args.tabId !== null &&
+        !(useAppStore.getState().tabsByWorktree[args.worktreeId] ?? []).some(
+          (tab) => tab.id === args.tabId
+        )
   if (delivery.kind !== 'delivered' && userClosedTab) {
     // Why: the user closed the tab, and with it the agent; nothing is owed a notice.
     return { delivered: false, failureNotified: true }

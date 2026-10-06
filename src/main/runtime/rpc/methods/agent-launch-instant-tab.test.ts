@@ -15,6 +15,8 @@ import {
   AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
 } from '../../../../shared/agent-launch-runtime-capability'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch-tab-closed'
+import { classifyAgentLaunchReplayRefusal } from '../../../../shared/agent-launch-replay-refusal'
+import { mapRuntimeError } from '../errors'
 import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type {
   AgentLaunchTabPublished,
@@ -41,9 +43,8 @@ import {
   type AgentLaunchRuntimeStubOptions
 } from './agent-launch.test-fixture'
 
-vi.mock('./agent-launch-terminal-prompt', () => ({
-  deliverTerminalAgentLaunchPrompt: vi.fn(async () => true)
-}))
+const deliverTerminalAgentLaunchPrompt = vi.hoisted(() => vi.fn(async () => true))
+vi.mock('./agent-launch-terminal-prompt', () => ({ deliverTerminalAgentLaunchPrompt }))
 
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
 const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
@@ -92,6 +93,7 @@ function nextOperationId(): string {
 }
 
 beforeEach(async () => {
+  deliverTerminalAgentLaunchPrompt.mockClear()
   directory = await mkdtemp(join(tmpdir(), 'agent-launch-instant-tab-'))
   store = await openTestAgentSessionRecordStore(directory)
   setAgentLaunchRecordStore(store)
@@ -544,6 +546,25 @@ describe('the user closing the tab while it starts', () => {
     expect(retried.published).toEqual([])
   })
 
+  it('stops an agent whose tab was closed while its terminal was created, before its prompt is pasted', async () => {
+    const runtime = hostWithWindow({ terminalPaneKey: PANE_KEY, lineCarriesPrompt: false })
+    const spawn = runtime.createTerminal.getMockImplementation()!
+    runtime.createTerminal.mockImplementationOnce(async (selector, createOptions) => {
+      markAgentLaunchPaneClosedByUser({ worktreeId: 'wt-7', paneKey: PANE_KEY })
+      return spawn(selector, createOptions)
+    })
+
+    await expect(
+      replayLaunch(
+        runtime,
+        { paneKey: PANE_KEY, prompt: { text: 'fix the build', delivery: 'submit' } },
+        CLI
+      )
+    ).rejects.toMatchObject({ code: AGENT_LAUNCH_TAB_CLOSED_CODE })
+    expect(runtime.closeTerminal).toHaveBeenCalledWith('term_1')
+    expect(deliverTerminalAgentLaunchPrompt).not.toHaveBeenCalled()
+  })
+
   it('stops an agent that already spawned', async () => {
     const runtime = hostWithWindow({ terminalPaneKey: PANE_KEY })
     const spawn = runtime.createTerminal.getMockImplementation()!
@@ -557,6 +578,22 @@ describe('the user closing the tab while it starts', () => {
       code: AGENT_LAUNCH_TAB_CLOSED_CODE
     })
     expect(runtime.closeTerminal).toHaveBeenCalledWith('term_1')
+  })
+
+  it('reaches a caller that reads the word as its own code on the wire, which the phone reads as failed', async () => {
+    const runtime = hostWithWindow({ terminalPaneKey: PANE_KEY })
+    closeTabWhenShown(runtime)
+
+    const thrown: unknown = await replayLaunch(
+      runtime,
+      { paneKey: PANE_KEY },
+      PHONE_READING_TAB_CLOSED
+    ).catch((error: unknown) => error)
+    const failure = mapRuntimeError('req-1', { runtimeId: 'runtime-1' }, thrown)
+
+    expect(failure.error).toMatchObject({ code: AGENT_LAUNCH_TAB_CLOSED_CODE })
+    // What the phone's launch switches on: a definite failure, worded by its own copy for this code.
+    expect(classifyAgentLaunchReplayRefusal(failure.error, false)).toBe('failed')
   })
 
   it('tells a caller that cannot read the word what it always heard', async () => {

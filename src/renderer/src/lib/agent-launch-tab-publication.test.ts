@@ -143,6 +143,28 @@ describe('publishing a launch tab before its agent exists', () => {
     expect(publishAgentLaunchTab(request({ requestId: 'request-2' })).created).toBe(false)
   })
 
+  it("remounts a pane that showed an earlier launch's outcome, so it spawns for the new launch", () => {
+    const generation = () =>
+      store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)?.generation ?? 0
+    publishAgentLaunchTab(request({ operationId: 'op-1' }))
+    // Its spawn was refused ("couldn't confirm"): the pane is idle until it remounts.
+    store.getState().setTabAgentLaunchPane(TAB_ID, {
+      leafId: LEAF_ID,
+      operationId: 'op-1',
+      outcome: { kind: 'unconfirmed' }
+    })
+    const before = generation()
+
+    publishAgentLaunchTab(request({ requestId: 'request-2', operationId: 'op-1' }))
+    expect(generation()).toBe(before)
+
+    publishAgentLaunchTab(request({ requestId: 'request-3', operationId: 'op-2' }))
+    expect(generation()).toBe(before + 1)
+    // A pane still waiting on a launch is spawning already: another launch does not remount it.
+    publishAgentLaunchTab(request({ requestId: 'request-4', operationId: 'op-3' }))
+    expect(generation()).toBe(before + 1)
+  })
+
   it("refuses a tab id another workspace already uses rather than minting one the agent won't find", () => {
     store.getState().createTab(OTHER_WT, undefined, undefined, { id: TAB_ID })
 

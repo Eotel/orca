@@ -258,6 +258,42 @@ describe('a pane whose process belongs to an agent launch', () => {
     expect(runtime.openAgentSessionRecordStore).not.toHaveBeenCalled()
   })
 
+  it('a new launch into a pane that showed "couldn\'t confirm" lets it attach to the new agent', async () => {
+    const providerSpawn = vi.fn(async () => ({ id: 'pty-new-agent' }))
+    const rows: AgentSessionOperationRow[] = []
+    // The saved tab still says an earlier launch could not be confirmed.
+    const runtime = registerWithRuntime(providerSpawn, {
+      rows,
+      onTab: { leafId, outcome: { kind: 'unconfirmed' } }
+    })
+    const running = trackRunningAgentLaunchPane(pane)
+
+    // The remounted pane spawns while the new launch runs: it waits, it does not show the old notice.
+    const mounted = mountPane()
+    rows.push(
+      recorded({
+        status: 'succeeded',
+        sessionId: '',
+        launch: {
+          outcome: { kind: 'terminal', handle: 'term_1', paneKey },
+          worktreeId,
+          receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: '' }
+        }
+      })
+    )
+    running.finish({ tabTakenBack: false })
+
+    // Past the verdict the ordinary spawn path runs (this suite's store double saves nothing).
+    await mounted.catch(() => {})
+    expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
+      kind: 'proceed'
+    })
+    expect(runtime.reportAgentLaunchPaneVerdict).not.toHaveBeenCalledWith(PANE_ADDRESS, {
+      kind: 'unconfirmed'
+    })
+    expect(providerSpawn).toHaveBeenCalled()
+  })
+
   it('after a restart, a settled launch pane spawns as any pane does, without opening the record', async () => {
     const providerSpawn = vi.fn(async () => ({ id: 'pty-ordinary' }))
     const runtime = registerWithRuntime(providerSpawn, { rows: null })

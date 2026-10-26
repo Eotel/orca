@@ -1,5 +1,6 @@
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { describe, expect, it, vi } from 'vitest'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
 import {
   OrcaRuntimeService,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
@@ -115,15 +116,16 @@ describe('OrcaRuntimeService', () => {
     }
     const startupCommand = startup.command
     const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
-    const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
+    const setup = spawn.mock.calls[1]![0] as { command: string; env: Record<string, string> }
+    const setupScript = setup.env[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]!
     const nonceMatch = startupScript.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
     expect(nonceMatch?.[1]).toBeTruthy()
     expect(startupCommand.length).toBeLessThan(256)
     expect(startupScript).toContain('exec claude')
     expect(startupScript).toContain('/mnt/c/tmp/repo/.git/orca/setup-runner.sh')
-    expect(setupCommand).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
-    expect(setupCommand).toContain('printf')
-    expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
+    expect(setup.command.length).toBeLessThan(256)
+    expect(setupScript).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
+    expect(setupScript).toContain(`${nonceMatch![1]} "$status"`)
     expect(result.setup).toBeUndefined()
   })
 

@@ -352,9 +352,9 @@ describe('OrcaRuntimeService', () => {
     }
     const startupCommand = startup.command
     const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
-    const setupScript = (spawn.mock.calls[1]![0] as { env: Record<string, string> }).env[
+    const setupScript = spawnedPtyEnv(spawn.mock.calls[1]![0])[
       SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV
-    ]!
+    ]
     const nonceMatch = startupScript.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
     expect(nonceMatch?.[1]).toBeTruthy()
     const markerPath = `/tmp/repo/.git/orca/setup-runner.sh.${nonceMatch![1]}.done`

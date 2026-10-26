@@ -335,7 +335,7 @@ describe('OrcaRuntimeService', () => {
       2,
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-startup-setup-split',
-        command: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"'`,
+        command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`,
         env: expect.objectContaining({
           ORCA_ROOT_PATH: '/tmp/repo',
           ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup-split',
@@ -478,7 +478,7 @@ describe('OrcaRuntimeService', () => {
       expect.any(String),
       expect.objectContaining({
         runnerScriptPath: 'C:\\tmp\\repo\\.git\\orca\\setup-runner.sh',
-        command: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"'`,
+        command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`,
         envVars: expect.objectContaining({
           [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(
             'bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh'

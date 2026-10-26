@@ -786,7 +786,7 @@ describe('registerWorktreeHandlers', () => {
     expect(result.setup).toEqual(
       expect.objectContaining({
         runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
-        command: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"'`
+        command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`
       })
     )
     expect(result.setup?.envVars[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain(

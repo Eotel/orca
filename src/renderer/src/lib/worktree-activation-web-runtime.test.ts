@@ -302,7 +302,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       recordInteraction: false
     })
     expect(createdTabStartups(store)['tab-2']).toEqual({
-      command: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"'`,
+      command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`,
       env: {
         ORCA_ROOT_PATH: '/tmp/repo',
         [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(

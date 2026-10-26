@@ -78,7 +78,7 @@ export function createSequencedSetupAgentCommands(args: {
   )
   return {
     // Why: long worktree paths can push typed wrappers past a PTY's canonical input cap and drop their submit byte.
-    setupCommand: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"'`,
+    setupCommand: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`,
     setupEnv: {
       [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: buildPosixSetupScript(
         resolution.command,

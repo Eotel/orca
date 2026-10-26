@@ -125,7 +125,7 @@ describe('OrcaRuntimeService', () => {
     expect(startupScript).toContain('exec claude')
     expect(startupScript).toContain('/mnt/c/tmp/repo/.git/orca/setup-runner.sh')
     expect(spawn.mock.calls[1]![0]).toMatchObject({
-      command: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"'`
+      command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`
     })
     expect(setupScript).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
     expect(setupScript).toContain(`${nonceMatch![1]} "$status"`)

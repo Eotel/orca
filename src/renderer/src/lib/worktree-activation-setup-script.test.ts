@@ -15,7 +15,7 @@ registerWorktreeActivationReset()
 
 function sequencedSetup(env: Record<string, string>, runnerCommand: string): unknown {
   return {
-    command: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"'`,
+    command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`,
     env: { ...env, [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(runnerCommand) }
   }
 }

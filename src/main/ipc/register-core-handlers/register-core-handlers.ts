@@ -25,7 +25,7 @@ import { registerExportHandlers } from '../export'
 import { registerStatsHandlers } from '../stats'
 import { registerMemoryHandlers } from '../memory'
 import { registerRateLimitHandlers } from '../rate-limits'
-import { registerRuntimeHandlers } from '../runtime'
+import { registerRuntimeHandlers, type RuntimeHandlerOptions } from '../runtime'
 import {
   invalidateRuntimeEnvironmentTransport,
   registerRuntimeEnvironmentHandlers
@@ -131,7 +131,7 @@ async function closeNotificationDismissalsBeforeRelaunch(
   }
 }
 
-type CoreHandlerLifecycleOptions = {
+type CoreHandlerLifecycleOptions = RuntimeHandlerOptions & {
   onBeforeRelaunch?: () => void | Promise<void>
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
@@ -260,7 +260,7 @@ export function registerCoreHandlers(
     registerFilesystemHandlers(store)
   }
   registerFilesystemWatcherHandlers()
-  registerRuntimeHandlers(runtime)
+  registerRuntimeHandlers(runtime, { onWindowGraphReady: lifecycleOptions.onWindowGraphReady })
   registerRuntimeEnvironmentHandlers(store)
   registerWslHostHandlers({
     store,

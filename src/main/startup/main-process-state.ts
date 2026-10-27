@@ -38,6 +38,7 @@ import type { ServeOptions } from './main-process-serve'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
 import { SkillShareDeepLinkState } from './skill-share-deep-link-state'
+import { TerminalDeepLinkState } from './terminal-deep-link-state'
 import { OsOpenedDocumentState } from './os-opened-documents'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
@@ -119,6 +120,7 @@ export const mainProcessState = {
   // Retain Settings clicks until the renderer pulls after listener mount.
   pendingOpenSettings: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
+  terminalDeepLinks: new TerminalDeepLinkState(),
   // Buffer OS Open With before any renderer listener exists.
   osOpenedDocuments: new OsOpenedDocumentState(),
   // Window existence does not prove listener readiness; only the renderer pull does, otherwise pushes silently vanish.

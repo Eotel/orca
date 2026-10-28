@@ -15415,12 +15415,15 @@
           "fileActions": "ファイル操作"
         },
         "XlsxViewer": {
+          "readOnly": "読み取り専用",
           "4688c4c466": "ブックを読み込んでいます…",
           "16c54c41e5": "ブックを表示できません",
           "2952ec35f8": "空のシート",
           "aaf26ba2b6": "{{name}}（非表示）",
-          "cb88b1b447": "{{rowCount}} 行",
-          "2ce5b9eecb": "{{columnCount}} 列",
+          "cb88b1b447_one": "{{rowCount}} 行",
+          "cb88b1b447_other": "{{rowCount}} 行",
+          "2ce5b9eecb_one": "{{columnCount}} 列",
+          "2ce5b9eecb_other": "{{columnCount}} 列",
           "2c8df21237": "{{limit}} 行まで表示"
         },
         "SpreadsheetChart": {

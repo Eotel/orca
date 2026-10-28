@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { LockKeyhole } from 'lucide-react'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -117,8 +118,8 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
           </div>
         )}
       </TabsContent>
-      <div className="flex items-center gap-3 border-t border-border bg-background px-3 py-1 text-xs text-foreground">
-        <div className="min-w-0 flex-1 overflow-x-auto scrollbar-editor">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-background px-3 py-1 text-xs text-foreground">
+        <div className="min-w-0 grow basis-48 overflow-x-auto scrollbar-editor">
           <TabsList size="sm" variant="line">
             {sheets.map((sheet, index) => (
               <TabsTrigger
@@ -142,33 +143,57 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
             ))}
           </TabsList>
         </div>
-        {activeSheet && (
-          <>
-            <span className="flex-shrink-0">
-              {translate('auto.components.editor.XlsxViewer.cb88b1b447', '{{rowCount}} rows', {
-                rowCount: activeSheet.rows.length.toLocaleString(getIntlLocale())
-              })}
-            </span>
-            <span className="flex-shrink-0">
-              {translate(
-                'auto.components.editor.XlsxViewer.2ce5b9eecb',
-                '{{columnCount}} columns',
-                {
-                  columnCount: activeSheet.maxColumns
-                }
-              )}
-            </span>
-            {activeSheet.truncated && (
-              <span className="flex-shrink-0 text-destructive">
-                {translate(
-                  'auto.components.editor.XlsxViewer.2c8df21237',
-                  'truncated at {{limit}} rows',
-                  { limit: MAX_XLSX_SHEET_ROWS.toLocaleString(getIntlLocale()) }
-                )}
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1 text-muted-foreground">
+          <span className="inline-flex shrink-0 items-center gap-1.5">
+            <LockKeyhole className="size-4" aria-hidden="true" />
+            {translate('auto.components.editor.XlsxViewer.readOnly', 'Read-only')}
+          </span>
+          {activeSheet && (
+            <>
+              <span className="flex-shrink-0">
+                {activeSheet.rows.length === 1
+                  ? translate(
+                      'auto.components.editor.XlsxViewer.cb88b1b447_one',
+                      '{{rowCount}} row',
+                      {
+                        count: activeSheet.rows.length,
+                        rowCount: activeSheet.rows.length.toLocaleString(getIntlLocale())
+                      }
+                    )
+                  : translate(
+                      'auto.components.editor.XlsxViewer.cb88b1b447_other',
+                      '{{rowCount}} rows',
+                      {
+                        count: activeSheet.rows.length,
+                        rowCount: activeSheet.rows.length.toLocaleString(getIntlLocale())
+                      }
+                    )}
               </span>
-            )}
-          </>
-        )}
+              <span className="flex-shrink-0">
+                {activeSheet.maxColumns === 1
+                  ? translate(
+                      'auto.components.editor.XlsxViewer.2ce5b9eecb_one',
+                      '{{columnCount}} column',
+                      { count: activeSheet.maxColumns, columnCount: activeSheet.maxColumns }
+                    )
+                  : translate(
+                      'auto.components.editor.XlsxViewer.2ce5b9eecb_other',
+                      '{{columnCount}} columns',
+                      { count: activeSheet.maxColumns, columnCount: activeSheet.maxColumns }
+                    )}
+              </span>
+              {activeSheet.truncated && (
+                <span className="flex-shrink-0 text-destructive">
+                  {translate(
+                    'auto.components.editor.XlsxViewer.2c8df21237',
+                    'truncated at {{limit}} rows',
+                    { limit: MAX_XLSX_SHEET_ROWS.toLocaleString(getIntlLocale()) }
+                  )}
+                </span>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </Tabs>
   )

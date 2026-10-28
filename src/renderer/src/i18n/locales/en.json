@@ -15745,9 +15745,12 @@
           "16c54c41e5": "Unable to render workbook",
           "2952ec35f8": "Empty sheet",
           "aaf26ba2b6": "{{name}} (hidden)",
-          "cb88b1b447": "{{rowCount}} rows",
-          "2ce5b9eecb": "{{columnCount}} columns",
-          "2c8df21237": "truncated at {{limit}} rows"
+          "cb88b1b447_one": "{{rowCount}} row",
+          "cb88b1b447_other": "{{rowCount}} rows",
+          "2ce5b9eecb_one": "{{columnCount}} column",
+          "2ce5b9eecb_other": "{{columnCount}} columns",
+          "2c8df21237": "truncated at {{limit}} rows",
+          "readOnly": "Read-only"
         },
         "SpreadsheetChart": {
           "3a8a24e9d0": "Chart",

@@ -239,7 +239,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('does not let stale Pi resume metadata claim a plain terminal', async () => {
+  it('keeps the provider-session agent type after Pi hook status expires', async () => {
     const paneKey = makePaneKey('stale-pi-tab', HEADLESS_LEAF_ID)
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentProviderSessionSnapshot: () => [
@@ -279,13 +279,12 @@ describe('OrcaRuntimeService', () => {
     expect(result.tabs[0]).toEqual(
       expect.objectContaining({
         type: 'terminal',
-        agentStatus: expect.not.objectContaining({ agentType: 'pi' })
+        agentStatus: expect.objectContaining({ state: 'done', agentType: 'pi' })
       })
     )
   })
 
-  it('does not claim a stale hook agent owns a pane whose agent has since exited', async () => {
-    // Retained status must not offer native chat for an agent that exited to its shell.
+  it('keeps the provider-session agent type after Claude hook status expires', async () => {
     const paneKey = makePaneKey('exited-tab', HEADLESS_LEAF_ID)
     const staleReceivedAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1_000
     const runtime = new OrcaRuntimeService(store, undefined, {
@@ -328,7 +327,7 @@ describe('OrcaRuntimeService', () => {
     const tab = result.tabs[0]
     expect(tab?.type).toBe('terminal')
     const agentStatus = tab && 'agentStatus' in tab ? tab.agentStatus : null
-    expect(agentStatus?.agentType ?? null).toBeNull()
+    expect(agentStatus).toMatchObject({ state: 'done', agentType: 'claude' })
   })
 
   it('waits for unknown-launch foreground owner before publishing Pi-compatible mobile status', async () => {

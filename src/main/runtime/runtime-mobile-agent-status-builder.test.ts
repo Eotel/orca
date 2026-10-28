@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
 import type { RuntimeAgentRowSnapshot } from './runtime-hook-agent-row-selection'
@@ -16,6 +16,10 @@ const TAB: RuntimeMobileSessionTerminalTab = {
 }
 
 describe('mobile agent status builder', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('keeps provider-session identity from a terminal-handle row rejoin', () => {
     const retained: RuntimeAgentRowSnapshot = {
       paneKey: 'old-tab:old-leaf',
@@ -81,6 +85,32 @@ describe('mobile agent status builder', () => {
     })
 
     expect(result.agentStatus?.programStatus).toEqual(programStatus)
+  })
+
+  it('keeps the provider-session agent type when an idle pane hook is older than 30 minutes', () => {
+    vi.useFakeTimers()
+    const completedAt = 1_700_000_000_000
+    vi.setSystemTime(completedAt + 31 * 60_000)
+    const row: AgentStatusIpcPayload = {
+      paneKey: PANE_KEY,
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      providerSession: PROVIDER_SESSION,
+      connectionId: null,
+      receivedAt: completedAt,
+      stateStartedAt: completedAt
+    }
+
+    const result = buildRuntimeMobileAgentStatus(null, LEAF_TAB, null, null, () => [row], {
+      getPaneKey: () => PANE_KEY,
+      getLeaf: () => null,
+      getTrackedTitle: () => null
+    })
+
+    expect(result.agentStatus).toEqual(
+      expect.objectContaining({ state: 'done', agentType: 'claude', stateStartedAt: completedAt })
+    )
   })
 })
 

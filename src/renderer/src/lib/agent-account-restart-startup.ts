@@ -14,10 +14,7 @@ import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-co
 import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
+import { resolveResumeLaunchRecipe } from '../../../shared/tui-agent-launch-defaults'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -53,8 +50,6 @@ export function resolveAgentAccountRestartResumeStartup(
   agent: AccountRestartAgent,
   args: AccountRestartPane
 ): AgentAccountRestartStartup | null {
-  // Why: a hand-started Claude must not come back with configured defaults such as a permission bypass.
-  const unrecordedLaunchUsesDefaults = agent !== 'claude'
   const state = useAppStore.getState()
   const paneKey = makePaneKey(args.tabId, args.leafId)
   const entry = state.agentStatusByPaneKey[paneKey]
@@ -86,22 +81,7 @@ export function resolveAgentAccountRestartResumeStartup(
     agent,
     providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs:
-      launchConfig !== undefined
-        ? launchConfig.agentArgs
-        : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchArgs(agent, state.settings)
-          : null,
-    agentEnv:
-      launchConfig !== undefined
-        ? launchConfig.agentEnv
-        : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchEnv(agent, state.settings, resumeTarget.platform)
-          : null,
-    ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    ...(launchConfig?.ompResumeFilePath
-      ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
-      : {}),
+    ...resolveResumeLaunchRecipe(launchConfig, agent, state.settings, resumeTarget.platform),
     platform: resumeTarget.platform,
     agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,

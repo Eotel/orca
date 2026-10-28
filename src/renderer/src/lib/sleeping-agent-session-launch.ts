@@ -64,7 +64,7 @@ export function launchSleepingAgentSession(
     agent: record.agent,
     providerSession: record.providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    ...resolveResumeLaunchRecipe(launchConfig),
+    ...resolveResumeLaunchRecipe(launchConfig, record.agent, state.settings, resumeTarget.platform),
     platform: resumeTarget.platform,
     agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,

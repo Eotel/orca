@@ -16,6 +16,7 @@ import {
   syncAgentHookCompletionNotificationSettings,
   resetAgentHookCompletionNotificationCoordinators
 } from '@/hooks/agent-hook-completion-notifications'
+import { resetAgentCompletionCoordinatorIdentitiesForTest } from '../agent-completion/agent-completion-identity-store'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store.getState() } }))
 vi.mock('../agent-completion/agent-hook-terminal-lifecycle', () => ({
@@ -88,6 +89,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetAgentHookCompletionNotificationCoordinators()
+  resetAgentCompletionCoordinatorIdentitiesForTest()
   setPresenceGated(true)
   vi.useRealTimers()
   vi.unstubAllGlobals()

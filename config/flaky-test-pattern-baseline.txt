@@ -706,7 +706,6 @@
 6 test-no-wall-clock:src/main/runtime/rpc/server/runtime-rpc-pairing-mode-persistence.test.ts
 11 test-no-wall-clock:src/main/runtime/rpc/server/runtime-rpc-relay-pairing.test.ts
 2 test-no-wall-clock:src/main/runtime/rpc/server/runtime-rpc-websocket-bind-host.test.ts
-9 test-no-wall-clock:src/main/runtime/session-lifecycle/projection/runtime-mobile-agent-status-builder.test.ts
 1 test-no-wall-clock:src/main/runtime/session-lifecycle/projection/runtime-mobile-codex-side-title.test.ts
 1 test-no-wall-clock:src/main/runtime/structured-child-records-switch.test.ts
 1 test-no-wall-clock:src/main/runtime/structured-codex-child-work-runtime.test.ts

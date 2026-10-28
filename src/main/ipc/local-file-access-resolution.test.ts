@@ -441,6 +441,14 @@ describe('chat-image requests', () => {
     ).toBe('denied')
   })
 
+  it.each(['book.xlsx', 'book.xlsm'])('refuses %s as a chat image', async (name) => {
+    const filePath = join(outside, name)
+    await writeFile(filePath, 'PK\0workbook')
+    await expect(resolveLocalFileRequestPath(filePath, CHAT_IMAGE, makeStore({}))).rejects.toThrow(
+      'a chat can only show local image files'
+    )
+  })
+
   it('refuse a relative path, a device and a PDF', async () => {
     const store = makeStore({})
     await writeFile(join(outside, 'doc.pdf'), '%PDF')

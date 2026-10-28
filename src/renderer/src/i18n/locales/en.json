@@ -15739,6 +15739,23 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Failed to list Markdown documents."
+        },
+        "XlsxViewer": {
+          "4688c4c466": "Loading workbook...",
+          "16c54c41e5": "Unable to render workbook",
+          "2952ec35f8": "Empty sheet",
+          "aaf26ba2b6": "{{name}} (hidden)",
+          "cb88b1b447_one": "{{rowCount}} row",
+          "cb88b1b447_other": "{{rowCount}} rows",
+          "2ce5b9eecb_one": "{{columnCount}} column",
+          "2ce5b9eecb_other": "{{columnCount}} columns",
+          "2c8df21237": "truncated at {{limit}} rows",
+          "readOnly": "Read-only"
+        },
+        "SpreadsheetChart": {
+          "3a8a24e9d0": "Chart",
+          "bc7b6e940e": "This chart type is not rendered",
+          "255f7ec4a9": "Too small to plot at this zoom"
         }
       },
       "diff": {
@@ -20649,5 +20666,9 @@
   },
   "startupFailure": {
     "title": "Orca could not start"
+  },
+  "spreadsheet": {
+    "resizeColumn": "Resize column {{label}}",
+    "resizeRow": "Resize row {{label}}"
   }
 }

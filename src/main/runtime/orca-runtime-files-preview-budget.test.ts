@@ -48,6 +48,26 @@ describe('RuntimeFileCommands', () => {
       return dir
     }
 
+    it.each([
+      ['.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+      ['.xlsm', 'application/vnd.ms-excel.sheet.macroEnabled.12']
+    ])('returns %s as a spreadsheet preview', async (extension, mimeType) => {
+      const dir = await previewFixture()
+      const name = `book${extension}`
+      const bytes = Buffer.from([0x50, 0x4b, 0, 1])
+      await writeFile(join(dir, name), bytes)
+      const { commands } = createRuntimeFileCommands({ path: dir })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      await expect(
+        commands.readFileExplorerPreview('id:wt-1', name, REMOTE_RPC_MAX_CONTENT_BYTES)
+      ).resolves.toEqual({
+        content: bytes.toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType
+      })
+    })
+
     it('stays inside the transport ceiling once base64-inflated', () => {
       const result = {
         content: Buffer.alloc(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES).toString('base64'),

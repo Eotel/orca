@@ -84,6 +84,12 @@
           "e72e6b03f4": "Rust",
           "edfcc64182": "Go"
         },
+        "XlsxViewer": {
+          "2ce5b9eecb_one": "{{columnCount}} column",
+          "2ce5b9eecb_other": "{{columnCount}} columns",
+          "cb88b1b447_one": "{{rowCount}} row",
+          "cb88b1b447_other": "{{rowCount}} rows"
+        },
         "editor": {
           "save": {
             "notUtf8": {

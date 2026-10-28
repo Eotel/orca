@@ -1,4 +1,8 @@
 import { extname } from 'node:path'
+import {
+  SPREADSHEET_FILE_MIME_TYPES,
+  resolvePreviewableBinaryByteLimit
+} from '../../../shared/spreadsheet-file-extensions'
 import { localLogFileIdentity } from '../../ai-vault/local-log-tail-reader'
 import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/binary-buffer'
 import {
@@ -21,7 +25,8 @@ export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
+  '.pdf': 'application/pdf',
+  ...SPREADSHEET_FILE_MIME_TYPES
 }
 
 export type LocalFileContent = {
@@ -38,7 +43,9 @@ export async function readLocalFileContent(filePath: string): Promise<LocalFileC
   const { handle, stats } = await openLocalRegularFile(filePath)
   try {
     const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-    const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+    const sizeLimit = mimeType
+      ? resolvePreviewableBinaryByteLimit(mimeType, MAX_PREVIEWABLE_BINARY_SIZE)
+      : MAX_TEXT_FILE_SIZE
     if (stats.size > sizeLimit) {
       throw fileTooLargeError(stats.size, sizeLimit)
     }

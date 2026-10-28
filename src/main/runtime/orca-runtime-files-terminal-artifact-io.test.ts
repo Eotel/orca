@@ -304,6 +304,24 @@ describe('RuntimeFileCommands', () => {
       ).rejects.toThrow('terminal_file_grant_stale')
     })
 
+    it.each(['result.xlsx', 'result.xlsm'])(
+      'does not preview %s as an image or PDF artifact',
+      async (name) => {
+        const artifactPath = await tempFile(name, 'PK\0workbook')
+        const { commands } = createRuntimeFileCommands({ path: '/repo' })
+        resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+        const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+        await expect(
+          commands.readTerminalArtifactPreview(
+            'id:wt-1',
+            target.grantId,
+            target.absolutePath,
+            'client-a'
+          )
+        ).rejects.toThrow('binary_file')
+      }
+    )
+
     it('keeps local terminal artifact previews above the remote cap available', async () => {
       const size = RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1
       const artifactPath = await tempFile('result.png', 'a'.repeat(size))

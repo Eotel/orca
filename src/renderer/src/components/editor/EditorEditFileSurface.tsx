@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { getBinaryFilePreviewKind } from './xlsx/binary-file-preview-kind'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
@@ -9,6 +10,7 @@ import {
   CsvViewer,
   CsvPagedViewer,
   ImageViewer,
+  XlsxViewer,
   IpynbViewer,
   MermaidViewer,
   MonacoEditor,
@@ -143,7 +145,17 @@ export function EditorEditFileSurface({
         />
       )
     }
-    if (fileContent.isImage) {
+    const previewKind = getBinaryFilePreviewKind(fileContent)
+    if (previewKind === 'spreadsheet') {
+      return (
+        <XlsxViewer
+          key={activeFile.id}
+          content={fileContent.content}
+          filePath={activeFile.filePath}
+        />
+      )
+    }
+    if (previewKind === 'image') {
       return (
         <ImageViewer
           content={fileContent.content}

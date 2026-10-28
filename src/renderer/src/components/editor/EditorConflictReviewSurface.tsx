@@ -1,3 +1,4 @@
+import { getBinaryFilePreviewKind } from './xlsx/binary-file-preview-kind'
 import React from 'react'
 import { conflictOverviewView } from '@/store/slices/editor/buffers/editor-buffer-conflict-overview'
 import { detectLanguage } from '@/lib/language-detect'
@@ -158,7 +159,7 @@ export function EditorConflictReviewSurface({
       )
     }
     if (fileContent.isBinary) {
-      if (fileContent.isImage) {
+      if (getBinaryFilePreviewKind(fileContent) === 'image') {
         return (
           <div className={className}>
             <ImageViewer

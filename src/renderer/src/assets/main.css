@@ -86,6 +86,14 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
+  --color-spreadsheet-surface: var(--spreadsheet-surface);
+  --color-spreadsheet-foreground: var(--spreadsheet-foreground);
+  --color-spreadsheet-header: var(--spreadsheet-header);
+  --color-spreadsheet-header-foreground: var(--spreadsheet-header-foreground);
+  --color-spreadsheet-gridline: var(--spreadsheet-gridline);
+  --color-spreadsheet-gridline-strong: var(--spreadsheet-gridline-strong);
+  --color-spreadsheet-row-hover: var(--spreadsheet-row-hover);
+  --color-spreadsheet-focus-ring: var(--spreadsheet-focus-ring);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-editor-surface: var(--editor-surface);
@@ -191,6 +199,15 @@
   --orca-security-ring: #a1a1a1;
   --background: #fff;
   --editor-surface: #ffffff;
+  /* Preserve authored cell colors on a white sheet in both app themes. */
+  --spreadsheet-surface: #ffffff;
+  --spreadsheet-foreground: #1f1f1f;
+  --spreadsheet-header: #f8f9fa;
+  --spreadsheet-header-foreground: #444746;
+  --spreadsheet-gridline: #e1e3e1;
+  --spreadsheet-gridline-strong: #c0c3c6;
+  --spreadsheet-row-hover: #f1f3f4;
+  --spreadsheet-focus-ring: var(--spreadsheet-header-foreground);
   --foreground: #0a0a0a;
   --chat-canvas-mix: 0%;
   --chat-foreground-mix: 82%;
@@ -303,6 +320,15 @@
   --orca-security-ring: #737373;
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
+  /* Preserve authored cell colors on a white sheet in both app themes. */
+  --spreadsheet-surface: #ffffff;
+  --spreadsheet-foreground: #1f1f1f;
+  --spreadsheet-header: #f8f9fa;
+  --spreadsheet-header-foreground: #444746;
+  --spreadsheet-gridline: #e1e3e1;
+  --spreadsheet-gridline-strong: #c0c3c6;
+  --spreadsheet-row-hover: #f1f3f4;
+  --spreadsheet-focus-ring: var(--spreadsheet-header-foreground);
   --foreground: #fafafa;
   --chat-canvas-mix: 5%;
   --chat-foreground-mix: 78%;

@@ -93,7 +93,13 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       agent: record.agent,
       providerSession,
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      ...resolveResumeLaunchRecipe(launchConfig),
+      ...resolveResumeLaunchRecipe(
+        launchConfig,
+        record.agent,
+        settings,
+        launchRuntime.platform,
+        agentLaunchQuotingShell(launchRuntime)
+      ),
       platform: launchRuntime.platform,
       shell: agentLaunchQuotingShell(launchRuntime),
       isRemote: Boolean(workspace.connectionId),

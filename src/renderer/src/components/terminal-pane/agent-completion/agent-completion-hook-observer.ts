@@ -30,7 +30,7 @@ type HookObserverOptions = {
   doneShouldUseQuietWindow: (payload: AgentCompletionStatusSnapshot) => boolean
   hookCompletionIdentity: (payload: AgentCompletionStatusSnapshot) => string | null
   hookCompletionAgentIdentity: (payload: AgentCompletionStatusSnapshot) => string | null
-  completionIdentityFor: (state: string, agentType: string | undefined, timestamp: number) => string
+  completionIdentityFor: (state: string, timestamp: number) => string
   openStampedTail: (timestamp: number) => boolean
   rememberHandledTurnCompletedAt: (timestamp: number) => void
   turnCompletedAtAlreadyHandled: (timestamp: number) => boolean
@@ -97,7 +97,7 @@ export function createAgentCompletionHookObserver({
           }
           const identity: LastCompletionIdentity = {
             source: 'hook',
-            identity: completionIdentityFor('done', payload.agentType, turnCompletedAt),
+            identity: completionIdentityFor('done', turnCompletedAt),
             agentIdentity: hookCompletionAgentIdentity(payload),
             lastTurnCompletedAtNotified: turnCompletedAt
           }

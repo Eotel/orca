@@ -109,8 +109,8 @@ export function createAgentCompletionCoordinator(
     notification.dispatchAttention(payload)
   }
 
-  const completionIdentityFor = (state: string, agentType: string | undefined, timestamp: number) =>
-    notification.completionIdentityFor(state, agentType, timestamp)
+  const completionIdentityFor = (state: string, timestamp: number) =>
+    notification.completionIdentityFor(state, timestamp)
   const hookCompletionIdentity = (payload: AgentCompletionStatusSnapshot) =>
     notification.hookCompletionIdentity(payload)
   const hookCompletionAgentIdentity = (payload: AgentCompletionStatusSnapshot) =>

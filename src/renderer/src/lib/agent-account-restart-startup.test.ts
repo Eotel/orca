@@ -197,7 +197,11 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
   beforeEach(() => {
     seedAgentStatus(null)
     projectRuntimeContext = undefined
-    useAppStore.setState({ tabsByWorktree: {}, worktreesByRepo: {} })
+    useAppStore.setState({
+      tabsByWorktree: {},
+      worktreesByRepo: {},
+      settings: getDefaultSettings('/home/dev')
+    })
   })
 
   it('resumes the pane’s Claude session with the launch marks the spawn needs', () => {
@@ -252,7 +256,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(buildPaneAccountRestartStartup('claude', pane)).toBeNull()
   })
 
-  it('resumes a hand-started Claude without the configured default arguments', () => {
+  it('resumes a hand-started Claude with the configured default arguments and environment', () => {
     seedAgentStatus({
       agentType: 'claude',
       state: 'done',
@@ -268,8 +272,25 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
 
     const startup = buildPaneAccountRestartStartup('claude', pane)
     expect(startup?.command).toContain(SESSION_ID)
+    expect(startup?.command).toContain('--dangerously-skip-permissions')
+    expect(startup?.env?.CLAUDE_DEFAULT_ONLY).toBe('1')
+  })
+
+  it('keeps a recorded Claude launch config on resume', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    useAppStore.getState().registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), {
+      agentArgs: '--model opus',
+      agentEnv: { CLAUDE_RECORDED_ONLY: '1' }
+    })
+
+    const startup = buildPaneAccountRestartStartup('claude', pane)
+    expect(startup?.command).toContain('--model')
     expect(startup?.command).not.toContain('--dangerously-skip-permissions')
-    expect(startup?.env?.CLAUDE_DEFAULT_ONLY).toBeUndefined()
+    expect(startup?.env?.CLAUDE_RECORDED_ONLY).toBe('1')
   })
 
   // #31545: `cd pkg && claude` must come back in pkg, not the tab's start folder.
@@ -288,7 +309,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     })
 
     expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
-      `cd '/repo/pkg' && claude '--resume' '${SESSION_ID}'`
+      `cd '/repo/pkg' && claude '--dangerously-skip-permissions' '--resume' '${SESSION_ID}'`
     )
   })
 
@@ -304,7 +325,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     })
 
     expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
-      `cd '/repo/pkg' && claude '--resume' '${SESSION_ID}'`
+      `cd '/repo/pkg' && claude '--dangerously-skip-permissions' '--resume' '${SESSION_ID}'`
     )
   })
 
@@ -349,7 +370,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       })
 
       expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
-        `${prefix}claude '--resume' '${SESSION_ID}'`
+        `${prefix}claude '--dangerously-skip-permissions' '--resume' '${SESSION_ID}'`
       )
       expect(resolveAgentResumeLaunchTarget).toHaveBeenLastCalledWith(
         expect.objectContaining({
@@ -438,8 +459,8 @@ it.each(['claude', 'codex'] as const)(
     expect(startup?.command).toContain(SESSION_ID)
     expect(startup?.command).not.toContain('fresh-only')
     expect(startup?.command).not.toContain('high')
-    // The established hand-started Claude path has no configured fallback; Codex retains it.
-    expect(startup?.command.includes('literal')).toBe(agent === 'codex')
+    // An unrecorded launch uses the configured Arguments, without fresh model defaults.
+    expect(startup?.command).toContain('literal')
     useAppStore.getState().registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), {
       agentArgs: '--model recorded',
       agentEnv: { RECORDED: 'yes' }

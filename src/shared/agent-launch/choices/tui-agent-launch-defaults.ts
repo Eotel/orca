@@ -308,12 +308,20 @@ export function composeAgentLaunchProfile(
   }
 }
 
-/** Resume only the recorded recipe; defaults would grant bypass to unrecorded manual launches that never used it. */
+/** Recorded launches keep their recipe; unrecorded launches use Settings defaults, without fresh model defaults. */
 export function resolveResumeLaunchRecipe(
-  launchConfig: SleepingAgentLaunchConfig | undefined
+  launchConfig: SleepingAgentLaunchConfig | undefined,
+  agent: string,
+  settings: AgentLaunchProfileSettings | null | undefined,
+  platform: NodeJS.Platform | null | undefined,
+  shell?: AgentStartupShell
 ): SleepingAgentLaunchConfig {
   if (!launchConfig) {
-    return { agentArgs: '', agentEnv: {} }
+    const startupShell = resolveStartupShell(platform, shell)
+    return {
+      agentArgs: resolveTuiAgentLaunchRawArgs(agent, settings, undefined, startupShell),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, settings, platform)
+    }
   }
   return {
     agentArgs: launchConfig.agentArgs,

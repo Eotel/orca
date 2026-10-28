@@ -217,6 +217,9 @@ function isNumericCellType(cellType: string | undefined): boolean {
 }
 
 function readStyleIndex(styleIndexAttribute: string | undefined): number | undefined {
+  if (styleIndexAttribute === undefined) {
+    return 0
+  }
   const styleIndex = Number.parseInt(styleIndexAttribute ?? '', 10)
   return Number.isInteger(styleIndex) ? styleIndex : undefined
 }

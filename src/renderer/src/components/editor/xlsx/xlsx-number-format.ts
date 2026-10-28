@@ -185,6 +185,9 @@ function parseSection(section: string): XlsxNumericSection | null {
     if (seenNumeric && /[Ee]/.test(char) && /^[+-][0#?]+/.test(section.slice(index + 1))) {
       return null
     }
+    if (seenNumeric && char === '/') {
+      return null
+    }
     if (seenNumeric) {
       suffix += char
     } else {

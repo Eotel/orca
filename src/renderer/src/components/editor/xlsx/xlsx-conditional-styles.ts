@@ -28,6 +28,7 @@ export function applyXlsxConditionalStyles(
   // Why: lower priority numbers are applied first, and once a matching rule says
   // `stopIfTrue` no later rule may touch that cell.
   const stopped = new Set<string>()
+  const applied = new Map<string, XlsxDifferentialFormat>()
 
   for (const rule of input.rules) {
     const differentialFormat = input.differentialFormats[rule.differentialFormatId]
@@ -59,10 +60,12 @@ export function applyXlsxConditionalStyles(
       }
       if (paints) {
         const styleRow = (styles[cell.rowIndex] ??= [])
-        styleRow[cell.columnIndex] = mergeDifferentialFormat(
-          styleRow[cell.columnIndex],
-          differentialFormat
-        )
+        const previous = applied.get(key)
+        styleRow[cell.columnIndex] = {
+          ...mergeDifferentialFormat(styleRow[cell.columnIndex], differentialFormat),
+          ...previous
+        }
+        applied.set(key, { ...differentialFormat, ...previous })
       }
       if (rule.stopIfTrue) {
         stopped.add(key)

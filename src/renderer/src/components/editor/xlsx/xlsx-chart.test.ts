@@ -243,6 +243,17 @@ const PROGRESS_WEIGHTS = [
 ]
 
 describe('parseXlsxChart with overlaid plots', () => {
+  it('keeps series from repeated plot types in document order', () => {
+    const xml = chartXml(
+      `<c:lineChart>${series({ name: 'Primary', values: [1, 2] })}</c:lineChart><c:lineChart>${series({ name: 'Secondary', values: [3, 4] })}</c:lineChart>`
+    )
+
+    expect(parseXlsxChart(xml, THEME)?.series.map((entry) => entry.name)).toEqual([
+      'Primary',
+      'Secondary'
+    ])
+  })
+
   it('reads the series of every plot in the plot area, each tagged with its own kind', () => {
     const xml = chartXml(
       `<c:areaChart>${series({ name: 'Sombreado', values: [176, 177] })}</c:areaChart>

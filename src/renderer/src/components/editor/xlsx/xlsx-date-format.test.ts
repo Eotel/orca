@@ -6,6 +6,15 @@ const OPTIONS = { use1904DateSystem: false, locale: 'es-ES' }
 const MAY_26_2026 = 46168
 
 describe('formatXlsxDate', () => {
+  it('carries a rounded midnight into the next date', () => {
+    const serial = 45292 + 86399.9 / 86400
+
+    expect(formatXlsxDate(serial, 'yyyy-mm-dd hh:mm:ss', OPTIONS)).toBe('2024-01-02 00:00:00')
+    expect(formatXlsxDate(serial, 'yyyy-mm-dd hh:mm:ss AM/PM', OPTIONS)).toBe(
+      '2024-01-02 12:00:00 AM'
+    )
+  })
+
   it('renders the code a chart axis carries', () => {
     // `d\-m` is what Excel wrote for that axis; the viewer showed 46168.
     expect(formatXlsxDate(MAY_26_2026, 'd\\-m', OPTIONS)).toBe('26-5')

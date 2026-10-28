@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { resolveSpreadsheetCellAlignment } from './SpreadsheetCell'
 import { computeSpreadsheetTextOverflowWidth } from './spreadsheet-text-overflow'
 
 function width(
@@ -28,6 +29,17 @@ function width(
 }
 
 describe('computeSpreadsheetTextOverflowWidth', () => {
+  it('clips inferred right-aligned numbers beside an occupied cell on the left', () => {
+    const row = ['Label', '123456789012345', '']
+
+    expect(
+      width(row, 1, {
+        widths: [80, 80, 80],
+        alignment: resolveSpreadsheetCellAlignment(row[1]!, undefined)
+      })
+    ).toBeNull()
+  })
+
   it('runs across every following empty column', () => {
     // Why: this is what turns "Presupuesto mens…" back into the whole title.
     expect(width(['Presupuesto mensual', '', '', '', ''], 0)).toBe(400)

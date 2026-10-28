@@ -141,7 +141,9 @@ function readDateParts(serial: number, options: XlsxDateSystem): DateParts | nul
   if (!Number.isFinite(serial) || serial < 0) {
     return null
   }
-  const days = Math.floor(serial)
+  const roundedSeconds = Math.round((serial - Math.floor(serial)) * 86_400)
+  const carriedDays = Math.floor(roundedSeconds / 86_400)
+  const days = Math.floor(serial) + carriedDays
   if (days === PHANTOM_LEAP_DAY_SERIAL && !options.use1904DateSystem) {
     return null
   }
@@ -154,7 +156,7 @@ function readDateParts(serial: number, options: XlsxDateSystem): DateParts | nul
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  return { date, secondsOfDay: Math.round((serial - days) * 86_400) }
+  return { date, secondsOfDay: roundedSeconds - carriedDays * 86_400 }
 }
 
 function renderToken(

@@ -2,6 +2,7 @@ import type React from 'react'
 import { cn } from '@/lib/utils'
 import {
   SPREADSHEET_ALIGNMENT_CLASSES,
+  getSpreadsheetCellAlignment,
   getSpreadsheetCellAlignmentClass
 } from './spreadsheet-cell-alignment'
 
@@ -52,7 +53,7 @@ export function resolveSpreadsheetCellAlignment(
   if (cellStyle?.horizontalAlignment !== undefined) {
     return cellStyle.horizontalAlignment
   }
-  return getSpreadsheetCellAlignmentClass(cell).startsWith('justify-start') ? 'left' : 'center'
+  return getSpreadsheetCellAlignment(cell)
 }
 
 export function buildSpreadsheetCellBorderStyle(

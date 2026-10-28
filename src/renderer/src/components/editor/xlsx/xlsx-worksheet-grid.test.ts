@@ -73,6 +73,32 @@ describe('parseXlsxWorksheetGrid cell styles', () => {
 })
 
 describe('parseXlsxWorksheetGrid', () => {
+  it('uses the default style when a cell omits its style index', () => {
+    const stylesXml =
+      '<styleSheet><fonts><font><b/></font></fonts><cellXfs><xf numFmtId="9" fontId="0"/></cellXfs></styleSheet>'
+    const grid = parseXlsxWorksheetGrid(
+      '<row><c><v>0.25</v></c></row>',
+      context({
+        numberFormats: parseXlsxNumberFormats(stylesXml),
+        cellStyles: parseXlsxCellStyles(stylesXml, [])
+      })
+    )
+
+    expect(grid.rows[0]?.[0]).toBe('25%')
+    expect(grid.styles[0]?.[0]?.bold).toBe(true)
+  })
+
+  it('retains the stored number for an unsupported fraction format', () => {
+    const grid = parseXlsxWorksheetGrid(
+      '<row><c s="0"><v>1.5</v></c></row>',
+      context({
+        numberFormats: { getFormatCode: () => '# ?/?', isDateStyle: () => false }
+      })
+    )
+
+    expect(grid.rows[0]?.[0]).toBe('1.5')
+  })
+
   it('shows the stored number for unsupported scientific formats', () => {
     const grid = parseXlsxWorksheetGrid(
       '<row><c s="0"><v>12345</v></c></row>',

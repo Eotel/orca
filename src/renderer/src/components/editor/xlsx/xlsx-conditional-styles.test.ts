@@ -168,7 +168,7 @@ describe('applyXlsxConditionalStyles', () => {
     expect(styles[0]?.[0]).toEqual({ backgroundColor: '#fcece6', textColor: '#000000', bold: true })
   })
 
-  it('lets the later rule win where two rules set the same property', () => {
+  it('preserves the higher-priority rule where two rules set the same property', () => {
     const styles = emptyStyles(1)
 
     applyXlsxConditionalStyles(
@@ -179,7 +179,7 @@ describe('applyXlsxConditionalStyles', () => {
       })
     )
 
-    expect(styles[0]?.[0]?.backgroundColor).toBe('#c6efce')
+    expect(styles[0]?.[0]?.backgroundColor).toBe('#fcece6')
   })
 
   it('stops a later rule only on the cells the stopping rule matched', () => {

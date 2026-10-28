@@ -38,8 +38,8 @@ describe('resolveSpreadsheetCellAlignment', () => {
     expect(resolveSpreadsheetCellAlignment('-7.5', undefined)).not.toBe('left')
   })
 
-  it('reports centre rather than right for a number', () => {
-    expect(resolveSpreadsheetCellAlignment('1234', undefined)).toBe('center')
+  it('reports the rendered right alignment for a number', () => {
+    expect(resolveSpreadsheetCellAlignment('1234', undefined)).toBe('right')
   })
 
   it('does not infer left for an ISO date, with or without a time', () => {
@@ -64,7 +64,7 @@ describe('resolveSpreadsheetCellAlignment', () => {
 
   it('infers from the value when the style only carries weight', () => {
     expect(resolveSpreadsheetCellAlignment('Gastos', { bold: true })).toBe('left')
-    expect(resolveSpreadsheetCellAlignment('42', { bold: true })).toBe('center')
+    expect(resolveSpreadsheetCellAlignment('42', { bold: true })).toBe('right')
   })
 
   it('treats an explicitly undefined alignment as none at all', () => {
@@ -73,7 +73,7 @@ describe('resolveSpreadsheetCellAlignment', () => {
         horizontalAlignment: undefined
       })
     ).toBe('left')
-    expect(resolveSpreadsheetCellAlignment('42', { horizontalAlignment: undefined })).toBe('center')
+    expect(resolveSpreadsheetCellAlignment('42', { horizontalAlignment: undefined })).toBe('right')
   })
 
   it('infers left for a number padded with spaces', () => {

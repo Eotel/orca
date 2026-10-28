@@ -171,15 +171,16 @@ function findPlots(plotAreaXml: string): XlsxChartPlot[] {
   const found: (XlsxChartPlot & { position: number })[] = []
 
   const consider = (element: string, kind: XlsxChartKind | null): void => {
-    const xml = readElementInner(plotAreaXml, element)
-    if (xml === null) {
-      return
-    }
-    found.push({
-      element,
-      kind: kind === 'column' && readAttributeValue(xml, 'c:barDir') === 'bar' ? 'bar' : kind,
-      xml,
-      position: plotAreaXml.indexOf(`<${element}`)
+    let searchFrom = 0
+    forEachXlsxXmlElement(plotAreaXml, element, ({ inner: xml }) => {
+      const position = plotAreaXml.indexOf(`<${element}`, searchFrom)
+      searchFrom = position + 1
+      found.push({
+        element,
+        kind: kind === 'column' && readAttributeValue(xml, 'c:barDir') === 'bar' ? 'bar' : kind,
+        xml,
+        position
+      })
     })
   }
 

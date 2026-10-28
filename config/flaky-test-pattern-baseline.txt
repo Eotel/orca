@@ -1414,6 +1414,5 @@
 9 test-no-real-time-wait:tests/e2e/chinese-ime-chat-input-repro.spec.ts
 9 test-no-real-time-wait:tests/e2e/terminal-inline-tui-reveal-convergence.spec.ts
 9 test-no-wall-clock:src/main/github/pr-refresh-coordinator-active-visible-priority.test.ts
-9 test-no-wall-clock:src/main/runtime/runtime-mobile-agent-status-builder.test.ts
 9 test-no-wall-clock:src/main/runtime/worker-terminal-archive-screen.test.ts
 9 test-timeout-needs-reason:tests/e2e/paired-instant-browser-tab.spec.ts

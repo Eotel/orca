@@ -86,7 +86,11 @@ export function resolveAgentAccountRestartResumeStartup(
     agent,
     providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    ...resolveResumeLaunchRecipe(launchConfig, agent, providerSession),
+    ...resolveResumeLaunchRecipe(launchConfig, agent, providerSession, {
+      settings: state.settings,
+      platform: resumeTarget.platform,
+      shell: resumeTarget.shell
+    }),
     platform: resumeTarget.platform,
     agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,

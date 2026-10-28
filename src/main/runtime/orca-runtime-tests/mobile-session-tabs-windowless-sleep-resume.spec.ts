@@ -36,7 +36,7 @@ function makeWorkingSleepStore(overrides: Partial<SleepingAgentSessionRecord> = 
     })
   )
   const baseSettings = fixture.runtimeStore.getSettings
-  // Resume must preserve permissions rather than inherit wider launch defaults.
+  // Recorded launch flags must override the configured defaults.
   fixture.runtimeStore.getSettings = () => ({
     ...baseSettings(),
     agentDefaultArgs: { claude: '--dangerously-skip-permissions' }
@@ -106,6 +106,18 @@ function spawnedCommand(spawn: ReturnType<typeof vi.fn>, call = 0): string {
 }
 
 describe('opening a workspace-slept running agent on a host with no window', () => {
+  it('resumes an unrecorded launch with Settings defaults', async () => {
+    const { runtimeStore } = makeWorkingSleepStore()
+    const { opened, spawn } = openPane(runtimeStore, 'blocked')
+
+    await expect(opened).resolves.toMatchObject({ tabs: [{ status: 'ready' }] })
+    expect(spawn).toHaveBeenCalledOnce()
+    const command = spawnedCommand(spawn)
+    expect(command).toContain('--resume')
+    expect(command).toContain('provider-session-1')
+    expect(command).toContain('--dangerously-skip-permissions')
+  })
+
   // A restart that loses the PTY still needs the saved resume flags.
   it('still resumes with the recorded flags after a host restart loses the PTY', async () => {
     const fixture = makeWorkingSleepStore({

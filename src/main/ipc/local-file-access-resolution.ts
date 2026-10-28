@@ -59,7 +59,7 @@ export async function resolveUserNamedRegularFile(
 // Chat uses img rendering; PDF previews need a different surface.
 function isChatImage(filePath: string): boolean {
   const extension = extname(filePath).toLowerCase()
-  return Boolean(PREVIEWABLE_BINARY_MIME_TYPES[extension]) && extension !== '.pdf'
+  return PREVIEWABLE_BINARY_MIME_TYPES[extension]?.startsWith('image/') === true
 }
 
 // Resolve path text first because devices can hide behind dot and parent segments.

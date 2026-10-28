@@ -1,3 +1,4 @@
+import { SPREADSHEET_FILE_MIME_TYPES } from '../../../shared/spreadsheet-file-extensions'
 import type { RuntimeFilePreviewResult } from '../../../shared/runtime-types'
 import {
   REMOTE_RPC_MAX_CONTENT_BYTES,
@@ -42,7 +43,7 @@ export const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = previewableBinaryByteLimit(
   REMOTE_RPC_MAX_CONTENT_BYTES
 )
 
-export const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
+export const TERMINAL_ARTIFACT_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -52,4 +53,9 @@ export const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
+}
+
+export const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
+  ...TERMINAL_ARTIFACT_PREVIEWABLE_BINARY_MIME_TYPES,
+  ...SPREADSHEET_FILE_MIME_TYPES
 }

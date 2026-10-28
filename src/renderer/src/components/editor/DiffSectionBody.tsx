@@ -1,3 +1,4 @@
+import { getBinaryFilePreviewKind } from './xlsx/binary-file-preview-kind'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { editor } from 'monaco-editor'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
@@ -152,7 +153,7 @@ export function DiffSectionBody({
           </Button>
         </div>
       ) : section.diffResult?.kind === 'binary' ? (
-        section.diffResult.isImage ? (
+        getBinaryFilePreviewKind(section.diffResult) === 'image' ? (
           <ImageDiffViewer
             originalContent={section.diffResult.originalContent}
             modifiedContent={section.diffResult.modifiedContent}

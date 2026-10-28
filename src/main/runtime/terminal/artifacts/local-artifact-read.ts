@@ -4,7 +4,7 @@ import type { TerminalFileGrant } from './file-grants'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   MOBILE_FILE_READ_MAX_BYTES,
-  RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES,
+  TERMINAL_ARTIFACT_PREVIEWABLE_BINARY_MIME_TYPES,
   previewableBinaryByteLimit
 } from '../../files/file-preview-budget'
 import {
@@ -48,7 +48,8 @@ export async function readLocalTerminalArtifactPreviewFromHandle(
     throw new Error('Cannot preview a directory')
   }
   assertTerminalFileGrantFresh(grant, fileStats)
-  const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(grant.absolutePath).toLowerCase()]
+  const mimeType =
+    TERMINAL_ARTIFACT_PREVIEWABLE_BINARY_MIME_TYPES[extname(grant.absolutePath).toLowerCase()]
   if (mimeType) {
     const binaryMaxBytes =
       maxContentBytes === undefined

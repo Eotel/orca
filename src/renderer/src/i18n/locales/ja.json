@@ -15413,6 +15413,20 @@
         },
         "EditorPanelActionsMenu": {
           "fileActions": "ファイル操作"
+        },
+        "XlsxViewer": {
+          "4688c4c466": "ブックを読み込んでいます…",
+          "16c54c41e5": "ブックを表示できません",
+          "2952ec35f8": "空のシート",
+          "aaf26ba2b6": "{{name}}（非表示）",
+          "cb88b1b447": "{{rowCount}} 行",
+          "2ce5b9eecb": "{{columnCount}} 列",
+          "2c8df21237": "{{limit}} 行まで表示"
+        },
+        "SpreadsheetChart": {
+          "3a8a24e9d0": "グラフ",
+          "bc7b6e940e": "この種類のグラフは表示できません",
+          "255f7ec4a9": "表示するには拡大してください"
         }
       },
       "diff": {
@@ -20495,5 +20509,9 @@
     "math": {
       "scrollDisplayEquation": "数式ブロックをスクロール"
     }
+  },
+  "spreadsheet": {
+    "resizeColumn": "{{label}} 列の幅を変更",
+    "resizeRow": "{{label}} 行の高さを変更"
   }
 }

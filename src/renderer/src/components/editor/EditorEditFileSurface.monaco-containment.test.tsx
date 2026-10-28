@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
+import type { FileContent } from './editor-panel-content-types'
 import type { OpenFile } from '@/store/slices/editor'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
@@ -45,7 +46,8 @@ vi.mock('./editor-lazy-views', () => {
   return {
     MonacoEditor: MonacoEditorStub,
     CsvViewer: unusedViewer,
-    ImageViewer: unusedViewer,
+    ImageViewer: () => <div data-testid="image-viewer" />,
+    XlsxViewer: () => <div data-testid="xlsx-viewer" />,
     IpynbViewer: unusedViewer,
     MermaidViewer: unusedViewer
   }
@@ -75,7 +77,9 @@ const activeFile: OpenFile = {
   mode: 'edit'
 }
 
-function Harness(): ReactElement {
+const TEXT_FILE: FileContent = { content: 'const a = 1\n', isBinary: false }
+
+function Harness({ fileContent = TEXT_FILE }: { fileContent?: FileContent }): ReactElement {
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="page.terminal"
@@ -90,7 +94,7 @@ function Harness(): ReactElement {
         diffViewStateKey="diff-view-state-1"
         pdfViewStateKey="pdf-view-state-1"
         pdfPreferenceKey="pdf-pref-1"
-        fileContent={{ content: 'const a = 1\n', isBinary: false }}
+        fileContent={fileContent}
         diffContent={undefined}
         editBuffer={undefined}
         activeConflictEntry={null}
@@ -155,6 +159,26 @@ describe('Monaco editor failure containment', () => {
     }
     return button
   }
+
+  it.each([
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel.sheet.macroEnabled.12'
+  ])('routes %s to the spreadsheet viewer before the image flag', (mimeType) => {
+    act(() =>
+      root?.render(
+        <Harness fileContent={{ content: 'UEs=', isBinary: true, isImage: true, mimeType }} />
+      )
+    )
+    expect(container?.querySelector('[data-testid="xlsx-viewer"]')).not.toBeNull()
+    expect(container?.querySelector('[data-testid="image-viewer"]')).toBeNull()
+  })
+
+  it('keeps older hosts without spreadsheet metadata on the binary placeholder', () => {
+    act(() => root?.render(<Harness fileContent={{ content: '', isBinary: true }} />))
+    expect(container?.querySelector('[data-testid="xlsx-viewer"]')).toBeNull()
+    expect(container?.querySelector('[data-testid="image-viewer"]')).toBeNull()
+    expect(editorMounts.count).toBe(0)
+  })
 
   it.each(['create', 'on-mount'] as const)(
     'contains a %s failure in the editor pane and still reports it',

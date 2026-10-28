@@ -1,3 +1,4 @@
+import { getBinaryFilePreviewKind } from './xlsx/binary-file-preview-kind'
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
@@ -54,7 +55,7 @@ export function EditorDiffFileSurface({
 
   const isEditable = activeFile.diffSource === 'unstaged'
   if (diffContent.kind === 'binary') {
-    if (diffContent.isImage) {
+    if (getBinaryFilePreviewKind(diffContent) === 'image') {
       return (
         <ImageDiffViewer
           originalContent={diffContent.originalContent}

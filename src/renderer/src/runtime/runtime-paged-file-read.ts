@@ -1,4 +1,8 @@
 import { basename } from '@/lib/path'
+import {
+  SPREADSHEET_FILE_MIME_TYPES,
+  resolvePreviewableBinaryByteLimit
+} from '../../../shared/spreadsheet-file-extensions'
 import { BINARY_PROBE_BYTES } from '../../../shared/binary-buffer'
 import { IMAGE_FILE_MIME_TYPES } from '../../../shared/image-file-extensions'
 import type {
@@ -142,6 +146,11 @@ export function pagedFilePreviewResult(
 ): RuntimeFilePreviewResult {
   const mimeType = previewableBinaryMimeType(relativePath)
   if (mimeType) {
+    if (
+      bytes.byteLength > resolvePreviewableBinaryByteLimit(mimeType, PAGED_REMOTE_FILE_MAX_BYTES)
+    ) {
+      throw new Error('file_too_large')
+    }
     return { content: bytesToBase64(bytes), isBinary: true, isImage: true, mimeType }
   }
   return pagedTextFileResult(bytes)
@@ -164,7 +173,9 @@ export function previewableBinaryMimeType(relativePath: string): string | undefi
     return undefined
   }
   const extension = name.slice(dot).toLowerCase()
-  return extension === '.pdf' ? 'application/pdf' : IMAGE_FILE_MIME_TYPES[extension]
+  return extension === '.pdf'
+    ? 'application/pdf'
+    : (IMAGE_FILE_MIME_TYPES[extension] ?? SPREADSHEET_FILE_MIME_TYPES[extension])
 }
 
 async function nullWhenUnsupported<TResult>(call: () => Promise<TResult>): Promise<TResult | null> {

@@ -1,5 +1,6 @@
 import { open, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
+import { resolvePreviewableBinaryByteLimit } from '../../../shared/spreadsheet-file-extensions'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import type {
@@ -82,7 +83,9 @@ export class RuntimeFileReads {
     requireLocalRuntimeFileRoute(target)
     const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-    const maxBytes = mimeType ? binaryMaxBytes : MOBILE_FILE_READ_MAX_BYTES
+    const maxBytes = mimeType
+      ? resolvePreviewableBinaryByteLimit(mimeType, binaryMaxBytes)
+      : MOBILE_FILE_READ_MAX_BYTES
     let buffer: Buffer
     try {
       buffer = (await readNodeFileWithinLimit(filePath, maxBytes)).buffer

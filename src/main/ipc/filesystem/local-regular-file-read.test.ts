@@ -2,6 +2,10 @@ import { mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  MAX_PREVIEWABLE_SPREADSHEET_SIZE,
+  SPREADSHEET_FILE_MIME_TYPES
+} from '../../../shared/spreadsheet-file-extensions'
 import { readLocalFileContent } from './filesystem-file-content-inspection'
 import {
   assertLocalWriteTargetIsRegularFile,
@@ -29,6 +33,27 @@ describe('local regular-file reads', () => {
       content: 'hello\n',
       isBinary: false
     })
+  })
+
+  it.each(Object.entries(SPREADSHEET_FILE_MIME_TYPES))(
+    'previews %s as base64',
+    async (extension, mimeType) => {
+      const filePath = join(base, `book${extension}`)
+      const bytes = Buffer.from([0x50, 0x4b, 0, 1])
+      await writeFile(filePath, bytes)
+      await expect(readLocalFileContent(filePath)).resolves.toEqual({
+        content: bytes.toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType
+      })
+    }
+  )
+
+  it('rejects a workbook above the compressed size limit', async () => {
+    const filePath = join(base, 'large.xlsx')
+    await writeFile(filePath, Buffer.alloc(MAX_PREVIEWABLE_SPREADSHEET_SIZE + 1))
+    await expect(readLocalFileContent(filePath)).rejects.toThrow('File too large')
   })
 
   it('refuses a directory', async () => {

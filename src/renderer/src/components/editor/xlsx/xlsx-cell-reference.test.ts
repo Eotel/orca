@@ -75,6 +75,13 @@ describe('xlsxColumnLettersFromIndex', () => {
 })
 
 describe('expandXlsxCellRange', () => {
+  it('expands a permitted conditional-formatting range beyond the argument limit', () => {
+    const cells = expandXlsxCellRangeList('A1:A150000', 200_000)
+
+    expect(cells).toHaveLength(150_000)
+    expect(cells.at(-1)).toEqual({ rowIndex: 149_999, columnIndex: 0 })
+  })
+
   it('expands a single reference and a range', () => {
     expect(expandXlsxCellRange('D17')).toEqual([{ rowIndex: 16, columnIndex: 3 }])
     expect(expandXlsxCellRange('C21:C22')).toEqual([

@@ -54,10 +54,7 @@ export type XlsxWorksheetContext = {
 const BOOLEAN_CELL_TEXT = { true: 'TRUE', false: 'FALSE' } as const
 
 /**
- * Flattens a worksheet part into the dense string grid the viewer renders.
- *
- * Sheets are sparse on disk — blank rows and cells are simply absent — so gaps
- * are padded back in to keep every value under the column it belongs to.
+ * Reads positioned rows without padding every row to the widest column.
  */
 export function parseXlsxWorksheetGrid(
   xml: string,
@@ -114,7 +111,7 @@ export function parseXlsxWorksheetGrid(
   })
 
   return {
-    rows: padRows(rows, maxColumns),
+    rows,
     styles: collectStyles ? padStyleRows(styles, rows.length) : [],
     rowHeights,
     numericValues,
@@ -347,13 +344,4 @@ function padStyleRows(
     padded[rowIndex] ??= []
   }
   return padded
-}
-
-function padRows(rows: string[][], maxColumns: number): string[][] {
-  for (const row of rows) {
-    while (row.length < maxColumns) {
-      row.push('')
-    }
-  }
-  return rows
 }

@@ -109,10 +109,7 @@ describe('XlsxViewer', () => {
     // Why: a workbook has no header row concept, so row 1 stays data and the
     // heading row shows the spreadsheet column letters instead.
     expect(spreadsheetGridMock.latestProps?.header).toEqual(['A', 'B'])
-    expect(spreadsheetGridMock.latestProps?.rows).toEqual([
-      ['Region', ''],
-      ['North', '7']
-    ])
+    expect(spreadsheetGridMock.latestProps?.rows).toEqual([['Region'], ['North', '7']])
     expect(spreadsheetGridMock.latestProps?.columnCount).toBe(2)
   })
 

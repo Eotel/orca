@@ -1,4 +1,6 @@
 import { parseXlsxCellReference } from './xlsx-cell-reference'
+import type { XlsxWorksheetGrid } from './xlsx-worksheet-grid'
+import type { XlsxDrawingPosition } from './xlsx-drawings'
 import { forEachXlsxXmlElement } from './xlsx-xml-elements'
 
 /** A merged range, addressed by its top-left anchor. */
@@ -34,6 +36,27 @@ export function parseXlsxWorksheetLayout(xml: string): XlsxWorksheetLayout {
   return {
     columnWidths: parseColumnWidths(xml),
     mergedRanges: parseMergedRanges(xml)
+  }
+}
+
+export function extendXlsxGridToLayout(
+  grid: Pick<XlsxWorksheetGrid, 'rows' | 'maxColumns'>,
+  mergedRanges: readonly XlsxMergedRange[],
+  drawings: readonly XlsxDrawingPosition[],
+  maxRows: number
+): void {
+  let requiredRows = grid.rows.length
+  for (const drawing of drawings) {
+    requiredRows = Math.max(requiredRows, drawing.toRow + 1)
+    grid.maxColumns = Math.max(grid.maxColumns, drawing.toColumn + 1)
+  }
+  for (const range of mergedRanges) {
+    requiredRows = Math.max(requiredRows, range.rowIndex + range.rowSpan)
+    grid.maxColumns = Math.max(grid.maxColumns, range.columnIndex + range.columnSpan)
+  }
+  grid.maxColumns = Math.min(MAX_COLUMN_COUNT, grid.maxColumns)
+  while (grid.rows.length < Math.min(maxRows, requiredRows)) {
+    grid.rows.push([])
   }
 }
 

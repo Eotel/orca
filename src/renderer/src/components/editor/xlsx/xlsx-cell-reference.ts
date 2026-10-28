@@ -102,7 +102,9 @@ export function expandXlsxCellRangeList(references: string, maxCells: number): X
     if (expanded === null) {
       return []
     }
-    cells.push(...expanded)
+    for (const cell of expanded) {
+      cells.push(cell)
+    }
   }
   return cells
 }

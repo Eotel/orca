@@ -44,8 +44,15 @@ export function buildSpreadsheetChartScale(
   const step = chooseTickStep(max - min)
   const niceMin = Math.floor(min / step) * step
   const niceMax = Math.ceil(max / step) * step
+  if (niceMin + step === niceMin) {
+    return { min, max, ticks: [min, max] }
+  }
   const ticks: number[] = []
-  for (let tick = niceMin; tick <= niceMax + step / 2; tick += step) {
+  for (let index = 0; index <= TARGET_TICK_COUNT + 2; index += 1) {
+    const tick = niceMin + index * step
+    if (tick > niceMax + step / 2) {
+      break
+    }
     // Why: accumulating a float step drifts, so each tick is snapped back onto it.
     ticks.push(Number((Math.round(tick / step) * step).toPrecision(12)))
   }

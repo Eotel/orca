@@ -6,6 +6,23 @@ const DATE_STYLES_XML =
   '<styleSheet><numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/></numFmts><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="164"/></cellXfs></styleSheet>'
 
 describe('parseXlsxWorkbook', () => {
+  it('keeps a merged heading extending beyond the populated cells at its full size', async () => {
+    const bytes = buildXlsxWorkbook({
+      sheets: [
+        {
+          name: 'Summary',
+          sheetXml:
+            '<row r="1"><c r="A1" t="inlineStr"><is><t>Heading</t></is></c></row><mergeCells><mergeCell ref="A1:D4"/></mergeCells>'
+        }
+      ]
+    })
+
+    const sheet = (await parseXlsxWorkbook(bytes)).sheets[0]!
+    expect(sheet.rows).toHaveLength(4)
+    expect(sheet.maxColumns).toBe(4)
+    expect(sheet.rows[0]?.[0]).toBe('Heading')
+  })
+
   it('reads a workbook end to end from real zipped bytes', async () => {
     const bytes = buildXlsxWorkbook({
       sharedStrings: ['Region', 'Revenue', 'North'],

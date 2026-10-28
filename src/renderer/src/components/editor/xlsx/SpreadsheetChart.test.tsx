@@ -161,6 +161,34 @@ describe('SpreadsheetChart', () => {
 })
 
 describe('SpreadsheetChart gradients', () => {
+  it('keeps gradients distinct for multiple charts in the same document', () => {
+    const area = chart({
+      kind: 'area',
+      series: [
+        {
+          values: [1, 2],
+          gradient: [
+            { position: 0, color: '#123456' },
+            { position: 1, color: '#abcdef' }
+          ]
+        }
+      ]
+    })
+    const html = renderToStaticMarkup(
+      <>
+        <SpreadsheetChart chart={area} width={420} height={260} />
+        <SpreadsheetChart chart={area} width={420} height={260} />
+      </>
+    )
+    const ids = [...html.matchAll(/<linearGradient id="([^"]+)"/g)].map((match) => match[1])
+
+    expect(ids).toHaveLength(2)
+    expect(new Set(ids).size).toBe(2)
+    for (const id of ids) {
+      expect(html).toContain(`fill="url(#${id})"`)
+    }
+  })
+
   it('paints an area with the gradient the file declares', () => {
     const html = render(
       chart({

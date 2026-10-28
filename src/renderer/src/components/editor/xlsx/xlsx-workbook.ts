@@ -19,7 +19,11 @@ import {
 import { parseXlsxThemePalette } from './xlsx-theme-palette'
 import { readXlsxSheetDrawings, type XlsxSheetDrawing } from './xlsx-drawings'
 import { parseXlsxWorksheetGrid } from './xlsx-worksheet-grid'
-import { parseXlsxWorksheetLayout, type XlsxMergedRange } from './xlsx-worksheet-layout'
+import {
+  extendXlsxGridToLayout,
+  parseXlsxWorksheetLayout,
+  type XlsxMergedRange
+} from './xlsx-worksheet-layout'
 import { forEachXlsxXmlElement } from './xlsx-xml-elements'
 import { openXlsxZipArchive, type XlsxZipArchive } from './xlsx-zip-archive'
 
@@ -126,8 +130,6 @@ export async function parseXlsxWorkbook(
       relationships.byId.get(descriptor.relationshipId) ??
       resolveXlsxPartPath(workbookPartPath, `worksheets/sheet${index + 1}.xml`)
     const worksheetXml = await archive.readPartText(worksheetPartPath)
-    // Why: collecting the numbers behind every cell is only worth it when the sheet
-    // actually carries a sparkline, so the cheap text probe gates it.
     const hasSparklines = (worksheetXml ?? '').includes('SPARKLINE(')
     // Why: a conditional rule compares against the number behind a cell, not its
     // formatted text, so it needs the same raw values a sparkline does.
@@ -172,18 +174,7 @@ export async function parseXlsxWorkbook(
       locale,
       (reference) => resolveXlsxChartReference(reference, referenceSheets)
     )
-    // Drawings can be the only content on a sheet, or extend past its last populated cell.
-    const drawingRows = Math.min(
-      MAX_XLSX_SHEET_ROWS,
-      Math.max(0, ...sheet.drawings.map((drawing) => drawing.toRow + 1))
-    )
-    sheet.maxColumns = Math.min(
-      16_384,
-      Math.max(sheet.maxColumns, ...sheet.drawings.map((drawing) => drawing.toColumn + 1))
-    )
-    while (sheet.rows.length < drawingRows) {
-      sheet.rows.push([])
-    }
+    extendXlsxGridToLayout(sheet, sheet.mergedRanges, sheet.drawings, MAX_XLSX_SHEET_ROWS)
   }
   if (sheets.length === 0) {
     throw new Error('Not a valid workbook: it declares no worksheets')

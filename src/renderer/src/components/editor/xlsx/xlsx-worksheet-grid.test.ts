@@ -73,6 +73,17 @@ describe('parseXlsxWorksheetGrid cell styles', () => {
 })
 
 describe('parseXlsxWorksheetGrid', () => {
+  it('shows the stored number for unsupported scientific formats', () => {
+    const grid = parseXlsxWorksheetGrid(
+      '<row><c s="0"><v>12345</v></c></row>',
+      context({
+        numberFormats: { getFormatCode: () => '0.00E+00', isDateStyle: () => false }
+      })
+    )
+
+    expect(grid.rows[0]?.[0]).toBe('12345')
+  })
+
   it('reads numbers, shared strings and inline strings into a dense grid', () => {
     const xml = `<sheetData>
       <row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>
@@ -94,7 +105,7 @@ describe('parseXlsxWorksheetGrid', () => {
 
     const grid = parseXlsxWorksheetGrid(xml, context())
 
-    expect(grid.rows).toEqual([['1'], [''], [''], ['4']])
+    expect(grid.rows).toEqual([['1'], [], [], ['4']])
   })
 
   it('pads skipped columns so values stay under their own column', () => {
@@ -106,16 +117,27 @@ describe('parseXlsxWorksheetGrid', () => {
     expect(grid.maxColumns).toBe(4)
   })
 
-  it('pads short rows out to the widest row', () => {
+  it('keeps short rows unpadded and records the widest column separately', () => {
     const xml =
       '<row r="1"><c r="A1"><v>1</v></c></row><row r="2"><c r="A2"><v>2</v></c><c r="C2"><v>3</v></c></row>'
 
     const grid = parseXlsxWorksheetGrid(xml, context())
 
-    expect(grid.rows).toEqual([
-      ['1', '', ''],
-      ['2', '', '3']
-    ])
+    expect(grid.rows).toEqual([['1'], ['2', '', '3']])
+    expect(grid.maxColumns).toBe(3)
+  })
+
+  it('does not allocate a bounding rectangle for distant cells', () => {
+    const grid = parseXlsxWorksheetGrid(
+      '<row r="1"><c r="XFD1"><v>7</v></c></row><row r="1000"><c r="A1000"><v>9</v></c></row>',
+      context()
+    )
+
+    expect(grid.rows).toHaveLength(1000)
+    expect(grid.maxColumns).toBe(16_384)
+    expect(grid.rows[0]?.[16_383]).toBe('7')
+    expect(grid.rows[999]?.[0]).toBe('9')
+    expect(grid.rows.reduce((count, row) => count + row.length, 0)).toBe(16_385)
   })
 
   it('falls back to positional indexes when cells carry no reference', () => {
@@ -123,10 +145,7 @@ describe('parseXlsxWorksheetGrid', () => {
 
     const grid = parseXlsxWorksheetGrid(xml, context())
 
-    expect(grid.rows).toEqual([
-      ['1', '2'],
-      ['3', '']
-    ])
+    expect(grid.rows).toEqual([['1', '2'], ['3']])
   })
 
   it('ignores an unparseable cell reference rather than dropping the value', () => {

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useId } from 'react'
 import {
   buildSlicePath,
   clampToScale,
@@ -202,6 +202,7 @@ function PointMarks({
   height: number
   categoryCount: number
 }): React.JSX.Element {
+  const gradientPrefix = useId()
   const stepWidth = categoryCount > 1 ? width / (categoryCount - 1) : 0
   // Why: a scatter series states where each point sits on the shared x axis, and
   // an overlaid target line says so with only two points at the far ends. Placing
@@ -245,7 +246,7 @@ function PointMarks({
         }
         const path = points.map((point) => `${point.x},${point.y}`).join(' ')
         const baselineY = top + height - projectOntoScale(clampToScale(0, scale), scale) * height
-        const gradientId = `spreadsheet-chart-gradient-${seriesIndex}`
+        const gradientId = `${gradientPrefix}-spreadsheet-chart-gradient-${seriesIndex}`
         const gradient = sparklineGradient(chart, seriesIndex)
         return (
           <g key={seriesIndex}>

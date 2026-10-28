@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { buildSpreadsheetChartScale, projectOntoScale } from './spreadsheet-chart-scale'
 
 describe('buildSpreadsheetChartScale', () => {
+  it('terminates when the tick step is below the floating-point spacing', () => {
+    const scale = buildSpreadsheetChartScale([10_000_000_000_000_000, 10_000_000_000_000_002], {
+      includeZero: false
+    })
+
+    expect(scale.ticks).toEqual([10_000_000_000_000_000, 10_000_000_000_000_002])
+    expect(scale.max).toBeGreaterThan(scale.min)
+  })
+
   it('puts ticks on round numbers', () => {
     expect(buildSpreadsheetChartScale([950, 1450, 1500], { includeZero: true })).toEqual({
       min: 0,

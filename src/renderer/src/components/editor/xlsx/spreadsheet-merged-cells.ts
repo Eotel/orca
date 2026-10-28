@@ -1,4 +1,33 @@
 import type { XlsxMergedRange } from './xlsx-worksheet-layout'
+import type { SpreadsheetCellStyle } from './SpreadsheetCell'
+
+const NO_MERGE_BORDER = { width: '0px', style: 'none' }
+
+export function resolveSpreadsheetMergeBandStyle(
+  style: SpreadsheetCellStyle | undefined,
+  merge: XlsxMergedRange | undefined,
+  rowIndex: number,
+  firstRenderedColumn: number,
+  lastRenderedColumn: number
+): SpreadsheetCellStyle | undefined {
+  if (!merge) {
+    return style
+  }
+  const borders = { ...style?.borders }
+  if (rowIndex > merge.rowIndex) {
+    borders.top = NO_MERGE_BORDER
+  }
+  if (rowIndex < merge.rowIndex + merge.rowSpan - 1) {
+    borders.bottom = NO_MERGE_BORDER
+  }
+  if (firstRenderedColumn > merge.columnIndex) {
+    borders.left = NO_MERGE_BORDER
+  }
+  if (lastRenderedColumn < merge.columnIndex + merge.columnSpan - 1) {
+    borders.right = NO_MERGE_BORDER
+  }
+  return { ...style, borders }
+}
 
 export type SpreadsheetMergeIndex = {
   /** The merge covering a cell, or undefined when it stands alone. */

@@ -15,7 +15,8 @@ import {
 import { computeSpreadsheetTextOverflowWidth } from './spreadsheet-text-overflow'
 import {
   buildSpreadsheetMergeIndex,
-  planSpreadsheetMergePlacement
+  planSpreadsheetMergePlacement,
+  resolveSpreadsheetMergeBandStyle
 } from './spreadsheet-merged-cells'
 import { SpreadsheetGridOverlay } from './SpreadsheetGridOverlay'
 import { buildSpreadsheetOverlayPlacements } from './spreadsheet-grid-overlay'
@@ -362,7 +363,13 @@ export function SpreadsheetGrid({
                       : mergePlacement.showsValue && merge !== undefined && merge.rowSpan === 1
                         ? (rows[valueRowIndex]?.[valueColumnIndex] ?? '')
                         : ''
-                  const cellStyle = cellStyles?.[valueRowIndex]?.[valueColumnIndex]
+                  const cellStyle = resolveSpreadsheetMergeBandStyle(
+                    cellStyles?.[valueRowIndex]?.[valueColumnIndex],
+                    merge,
+                    virtualRow.index,
+                    firstRenderedColumn,
+                    lastRenderedColumn
+                  )
                   // Why: a label runs across empty neighbours the way a spreadsheet
                   // draws it, instead of being clipped to its column — to the right
                   // when it is left-aligned, to the left when it is right-aligned.

@@ -149,6 +149,28 @@ describe('SpreadsheetGrid overlay and overflow', () => {
 })
 
 describe('SpreadsheetGrid vertical merges', () => {
+  it('removes authored borders and gridlines inside a merge spanning rows', () => {
+    const edge = { width: '2px', style: 'solid', color: '#ff0000' }
+    render(
+      <SpreadsheetGrid
+        header={['A', 'B']}
+        rows={[
+          ['title', ''],
+          ['', '']
+        ]}
+        columnCount={2}
+        cellStyles={[[{ borders: { top: edge, bottom: edge, left: edge, right: edge } }]]}
+        mergedRanges={[{ rowIndex: 0, columnIndex: 0, rowSpan: 2, columnSpan: 2 }]}
+      />
+    )
+    const bands = container!.querySelectorAll<HTMLElement>('[role="cell"]')
+    expect(bands).toHaveLength(2)
+    expect(bands[0]!.style.borderBottomStyle).toBe('none')
+    expect(bands[1]!.style.borderTopStyle).toBe('none')
+    expect(bands[0]!.style.borderTopStyle).toBe('solid')
+    expect(bands[1]!.style.borderBottomStyle).toBe('solid')
+  })
+
   function renderWithMerge(
     mergedRanges: { rowIndex: number; columnIndex: number; rowSpan: number; columnSpan: number }[]
   ): void {

@@ -63,12 +63,8 @@ export function createAgentCompletionNotificationController({
     return `${source}:${state.currentTurn}:${processState.processSession}`
   }
 
-  function completionIdentityFor(
-    state: string,
-    agentType: string | undefined,
-    timestamp: number
-  ): string {
-    return [state, agentType ?? '', String(Math.trunc(timestamp))].join(':')
+  function completionIdentityFor(state: string, timestamp: number): string {
+    return [state, String(Math.trunc(timestamp))].join(':')
   }
 
   function hookCompletionIdentity(payload: AgentCompletionStatusSnapshot): string | null {
@@ -81,7 +77,7 @@ export function createAgentCompletionNotificationController({
     if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
       return null
     }
-    return completionIdentityFor(payload.state, payload.agentType, timestamp)
+    return completionIdentityFor(payload.state, timestamp)
   }
 
   function hookCompletionAgentIdentity(payload: AgentCompletionStatusSnapshot): string | null {

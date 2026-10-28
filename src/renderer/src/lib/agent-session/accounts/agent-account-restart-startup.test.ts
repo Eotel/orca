@@ -94,7 +94,11 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
   beforeEach(() => {
     seedAgentStatus(null)
     projectRuntimeContext = undefined
-    useAppStore.setState({ tabsByWorktree: {}, worktreesByRepo: {} })
+    useAppStore.setState({
+      tabsByWorktree: {},
+      worktreesByRepo: {},
+      settings: getDefaultSettings('/home/dev')
+    })
   })
 
   it('refuses a queued restart once another live pane holds the session', () => {
@@ -130,6 +134,43 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     })
 
     expect(buildPaneAccountRestartStartup('claude', pane)).toBeNull()
+  })
+
+  it('resumes a hand-started Claude with the configured default arguments and environment', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/home/dev'),
+        agentDefaultArgs: { claude: '--dangerously-skip-permissions' },
+        agentDefaultEnv: { claude: { CLAUDE_DEFAULT_ONLY: '1' } }
+      }
+    })
+
+    const startup = buildPaneAccountRestartStartup('claude', pane)
+    expect(startup?.command).toContain(SESSION_ID)
+    expect(startup?.command).toContain('--dangerously-skip-permissions')
+    expect(startup?.env?.CLAUDE_DEFAULT_ONLY).toBe('1')
+  })
+
+  it('keeps a recorded Claude launch config on resume', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    useAppStore.getState().registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), {
+      agentArgs: '--model opus',
+      agentEnv: { CLAUDE_RECORDED_ONLY: '1' }
+    })
+
+    const startup = buildPaneAccountRestartStartup('claude', pane)
+    expect(startup?.command).toContain('--model')
+    expect(startup?.command).not.toContain('--dangerously-skip-permissions')
+    expect(startup?.env?.CLAUDE_RECORDED_ONLY).toBe('1')
   })
 
   it.each([
@@ -173,7 +214,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       })
 
       expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
-        `${prefix}claude '--resume' '${SESSION_ID}'`
+        `${prefix}claude '--dangerously-skip-permissions' '--resume' '${SESSION_ID}'`
       )
       expect(resolveAgentResumeLaunchTarget).toHaveBeenLastCalledWith(
         expect.objectContaining({

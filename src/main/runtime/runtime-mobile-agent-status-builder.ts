@@ -109,6 +109,7 @@ export function buildRuntimeMobileAgentStatus(
     hookAgent: retained?.payload.agentType ?? hookRow.agentType
   })
   const ownerAgent = ownerRecord?.agent ?? pty?.foregroundAgent ?? null
+  const agentType = ownerAgent ?? hookRow.agentType ?? hookRow.providerSessionAgentType
   const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
   const terminalTitle = normalizeCompatibleAgentTitleForOwner(
     trackerOnlyTitle ?? (pty ? getLatestPtyTitle(pty) : null) ?? tab.title,
@@ -121,7 +122,6 @@ export function buildRuntimeMobileAgentStatus(
     updatedAt: number,
     segment: { stateStartedAt: number } & HostTurnEndFacts
   ): { agentStatus: AgentStatusEntry } => {
-    const agentType = ownerAgent ?? hookRow.agentType ?? hookRow.providerSessionAgentType
     return {
       agentStatus: normalizeCompatibleAgentStatusEntryForOwner(
         {
@@ -249,7 +249,6 @@ export function buildRuntimeMobileAgentStatus(
   // Rejected/stale/resume hook evidence proves identity only; title-derived done retires exited cards.
   // Date it by title evidence, not lastOutputAt, or every output byte outranks clients' live status.
   const evidenceAt = pty?.lastOscTitleEpochMs ?? hookRow.providerSessionReceivedAt ?? Date.now()
-  const agentType = ownerAgent ?? undefined
   return {
     agentStatus: {
       state:

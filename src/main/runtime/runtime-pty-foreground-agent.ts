@@ -165,8 +165,8 @@ export class RuntimePtyForegroundAgent {
     if (!result || result.controller !== this.deps.getController() || !result.available) {
       return false
     }
-    const agent = result.process ? (recognizeAgentProcess(result.process)?.agent ?? null) : null
-    if (pty.foregroundAgent === agent) {
+    const agent = await this.resolveAgent(ptyId, result)
+    if (result.controller !== this.deps.getController() || pty.foregroundAgent === agent) {
       return false
     }
     pty.foregroundAgent = agent
@@ -184,14 +184,24 @@ export class RuntimePtyForegroundAgent {
     if (!result || result.controller !== this.deps.getController() || !result.available) {
       return null
     }
+    return this.resolveAgent(ptyId, result)
+  }
+
+  private async resolveAgent(
+    ptyId: string,
+    result: PtyForegroundProcessRead
+  ): Promise<TerminalAgent | null> {
     const foregroundName = result.process
     const agent = recognizeAgentProcess(foregroundName)?.agent ?? null
+    const confirmed = this.confirmedByPtyId.get(ptyId)
     // Native Claude's p_comm is its versions/<semver> binary; only a process-table scan reads its argv.
     if (agent || !foregroundName || !NATIVE_CLAUDE_VERSION_NAME.test(foregroundName)) {
-      this.confirmedByPtyId.delete(ptyId)
+      // Why: the daemon answers with its scanned name only for a second, then the version name again.
+      if (confirmed?.agent !== agent) {
+        this.confirmedByPtyId.delete(ptyId)
+      }
       return agent
     }
-    const confirmed = this.confirmedByPtyId.get(ptyId)
     if (confirmed?.foregroundName === foregroundName) {
       return confirmed.agent
     }

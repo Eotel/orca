@@ -62,23 +62,9 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return this.readHeadlessVisibleTerminalState(ptyId)
     }
 
-    const generation = this.getPtyLifecycleGeneration(ptyId)
-    const outputSequence = this.getPtyOutputSequence(ptyId)
     const cached = this.readCurrentProviderVisibleState(ptyId)
     if (cached) {
       return cached
-    }
-    const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
-    if (trackedMode && !trackedMode.isAlternateScreen) {
-      const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
-      return headlessState
-        ? { ...headlessState, isAlternateScreen: false }
-        : {
-            lines: [],
-            isAlternateScreen: false,
-            sequence: outputSequence,
-            generation
-          }
     }
     return this.captureProviderVisibleState(ptyId)
   }
@@ -282,6 +268,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     if (controller.hasRendererSerializer && !controller.hasRendererSerializer(ptyId)) {
       return { lines: [] }
     }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
     try {
       // Raw tails can be blank while full-screen TUIs paint visible cells; ask renderer for the active screen.
       const snapshot = await withTimeout(
@@ -292,7 +279,17 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       if (!snapshot || snapshot.data.length === 0) {
         return { lines: [] }
       }
-      return await this.parseVisibleSnapshot(snapshot)
+      // Why: a hidden pane's renderer frame can be hours behind its PTY; an unsequenced one cannot prove otherwise.
+      const isCurrent = (): boolean =>
+        this.getPtyLifecycleGeneration(ptyId) === generation &&
+        (snapshot.seq === undefined
+          ? !this.providerSnapshotPreferredPtys.has(ptyId)
+          : snapshot.seq >= this.getPtyOutputSequence(ptyId))
+      if (!isCurrent()) {
+        return { lines: [] }
+      }
+      const projection = await this.parseVisibleSnapshot(snapshot)
+      return isCurrent() ? projection : { lines: [] }
     } catch {
       return { lines: [] }
     }

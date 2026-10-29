@@ -226,7 +226,8 @@ describe('OrcaRuntimeService', () => {
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: '\x1b[?1049h\x1b[2J\x1b[HRenderer TUI\r\n',
       cols: 80,
-      rows: 24
+      rows: 24,
+      seq: 910
     })
     let rendererMounted = false
     const runtime = new OrcaRuntimeService(store)

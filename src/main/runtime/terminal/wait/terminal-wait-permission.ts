@@ -80,13 +80,16 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     ptyId: string,
     paneAgent: TerminalAgent | null = this.getPaneAgentForTuiIdle(ptyId)
   ): TerminalInteractiveWaitEvidence | Promise<TerminalInteractiveWaitEvidence | undefined> {
-    if (paneAgent !== 'claude' || !this.headlessTerminals.has(ptyId)) {
+    const readAdoptedCodex = paneAgent === 'codex' && this.providerSnapshotPreferredPtys.has(ptyId)
+    if (!readAdoptedCodex && (paneAgent !== 'claude' || !this.headlessTerminals.has(ptyId))) {
       return this.buildTerminalInteractiveWaitEvidence(handle, ptyId, 'not-read')
     }
+    // Why: an adopted Codex pane without a current frame has no Claude dialog to rule out.
+    const noScreen = readAdoptedCodex ? 'not-read' : null
     return this.readCurrentTerminalWaitScreen(ptyId).then((screen) =>
       this.getTerminalAgentStatusPtyId(handle) !== ptyId || screen === undefined
         ? undefined
-        : this.buildTerminalInteractiveWaitEvidence(handle, ptyId, screen)
+        : this.buildTerminalInteractiveWaitEvidence(handle, ptyId, screen ?? noScreen)
     )
   }
 
@@ -97,11 +100,8 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
   ): TerminalInteractiveWaitEvidence {
     const observed = screen !== null && screen !== 'not-read'
     // Why the rendered screen: Claude parks the cursor inside its dialog, and the line tail drops rows below it.
-    const { terminal, lifecycle } = this.getTerminalWaitPermissionInputs(
-      handle,
-      ptyId,
-      observed ? screen.lines.join('\n') : undefined
-    )
+    const waitText = observed ? screen.lines.join('\n') : undefined
+    const { terminal, lifecycle } = this.getTerminalWaitPermissionInputs(handle, ptyId, waitText)
     const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle, ptyId)
     return {
       terminal,

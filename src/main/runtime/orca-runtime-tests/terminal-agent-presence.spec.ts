@@ -1,9 +1,38 @@
 import { describe, expect, it, vi } from 'vitest'
 import { committingSpawn } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_PATH, store } from '../orca-runtime-test-fixtures.spec'
+import { TEST_WORKTREE_PATH, store, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
 
 describe('terminal agent presence', () => {
+  it.skipIf(process.platform === 'win32')(
+    'keeps native Claude identity across inventory refreshes',
+    async () => {
+      let foreground = '2.1.312'
+      const confirmForegroundProcess = vi.fn(async () => 'claude')
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => foreground,
+        confirmForegroundProcess
+      })
+      syncSinglePty(runtime, 'pty-1', { paneTitle: 'worker' })
+
+      for (const name of ['2.1.312', '2.1.312', 'claude', '2.1.312']) {
+        foreground = name
+        await runtime.refreshPtyForegroundAgentFromController('pty-1')
+        expect((await runtime.listTerminals()).terminals[0].agentIdentity).toBe('claude')
+      }
+      expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+      foreground = 'zsh'
+      await runtime.refreshPtyForegroundAgentFromController('pty-1')
+      expect((await runtime.listTerminals()).terminals[0].agentIdentity).toBeUndefined()
+      confirmForegroundProcess.mockResolvedValue('vim')
+      foreground = '2.1.312'
+      await runtime.refreshPtyForegroundAgentFromController('pty-1')
+      expect((await runtime.listTerminals()).terminals[0].agentIdentity).toBeUndefined()
+    }
+  )
   it('finds an idle Claude by a fresh read when p_comm is its version directory', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-claude' })
     const runtime = new OrcaRuntimeService(store)

@@ -78,13 +78,18 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     ptyId: string,
     paneAgent: TerminalAgent | null = this.getPaneAgentForTuiIdle(ptyId)
   ): TerminalInteractiveWaitEvidence | Promise<TerminalInteractiveWaitEvidence | undefined> {
-    if (paneAgent !== 'claude' || !this.headlessTerminals.has(ptyId)) {
+    const readAdoptedCodex = paneAgent === 'codex' && this.providerSnapshotPreferredPtys.has(ptyId)
+    if (!readAdoptedCodex && (paneAgent !== 'claude' || !this.headlessTerminals.has(ptyId))) {
       return this.buildTerminalInteractiveWaitEvidence(handle, ptyId, 'not-read')
     }
     return this.readCurrentTerminalWaitScreen(ptyId).then((screen) =>
       this.getTerminalAgentStatusPtyId(handle) !== ptyId || screen === undefined
         ? undefined
-        : this.buildTerminalInteractiveWaitEvidence(handle, ptyId, screen)
+        : this.buildTerminalInteractiveWaitEvidence(
+            handle,
+            ptyId,
+            screen === null && readAdoptedCodex ? 'not-read' : screen
+          )
     )
   }
 

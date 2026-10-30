@@ -100,6 +100,8 @@ export type RuntimeMobileSessionBrowserTab = {
   color?: string | null
   isPinned?: boolean
   isActive: boolean
+  /** The paired server the page runs on. Its publisher sets it; runtimes strip it before serving. */
+  hostRuntimeEnvironmentId?: string
 }
 
 export type RuntimeMobileSessionAgentTab = {

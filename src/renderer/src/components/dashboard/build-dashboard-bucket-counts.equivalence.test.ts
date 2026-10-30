@@ -317,3 +317,15 @@ describe('buildDashboardBucketCounts equivalence with the unmemoized walk', () =
     expect(pastBoundary).toEqual(oracleBucketCounts(state, BASE + STALE + 1))
   })
 })
+
+describe('buildDashboardBucketCounts attention', () => {
+  it('counts unanswered questions as attention however old', () => {
+    const state = baseState()
+    state.agentStatusByPaneKey = {
+      [PANE_1]: entry(PANE_1, 'tab1', 'w1', { state: 'waiting' }),
+      [PANE_2]: entry(PANE_2, 'tab2', 'w2', { state: 'blocked' })
+    }
+
+    expect(buildDashboardBucketCounts(state, BASE + 18 * 60 * 60_000).attention).toBe(2)
+  })
+})

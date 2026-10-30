@@ -357,3 +357,15 @@ describe('buildDashboardBucketCounts equivalence with the unmemoized walk', () =
     expect(buildDashboardBucketCounts(moved, BASE + 2_000, cache, 1)).not.toBe(first)
   })
 })
+
+describe('buildDashboardBucketCounts attention', () => {
+  it('counts unanswered questions as attention however old', () => {
+    const state = baseState()
+    state.agentStatusByPaneKey = {
+      [PANE_1]: entry(PANE_1, 'tab1', 'w1', { state: 'waiting' }),
+      [PANE_2]: entry(PANE_2, 'tab2', 'w2', { state: 'blocked' })
+    }
+
+    expect(buildDashboardBucketCounts(state, BASE + 18 * 60 * 60_000).attention).toBe(2)
+  })
+})

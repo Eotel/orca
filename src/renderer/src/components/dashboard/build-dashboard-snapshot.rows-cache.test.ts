@@ -215,7 +215,8 @@ describe('buildDashboardSnapshot rows cache', () => {
         }),
         NOW + AGENT_STATUS_STALE_AFTER_MS + 1000
       )
-      expect(aged.cards[0].dotState).toBe('idle')
+      // An unanswered question stays attention however old; only a silent working turn decays.
+      expect(aged.cards[0].dotState).toBe(state === 'working' ? 'idle' : 'waiting')
       expect(dashboardCardDisplayState(aged.cards[0])).toBe('failed')
     }
   })

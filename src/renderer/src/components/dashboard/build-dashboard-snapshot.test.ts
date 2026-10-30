@@ -9,6 +9,7 @@ import type {
   AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -131,6 +132,23 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
 }
 
 describe('buildDashboardSnapshot', () => {
+  it('keeps an unanswered question waiting however old while a silent working turn decays', () => {
+    for (const state of ['working', 'waiting'] as const) {
+      const aged = buildDashboardSnapshot(
+        baseState({
+          agentStatusByPaneKey: {
+            [PANE_KEY]: entry({
+              state,
+              mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 1000 }
+            })
+          }
+        }),
+        NOW + AGENT_STATUS_STALE_AFTER_MS + 1000
+      )
+      expect(aged.cards[0].dotState).toBe(state === 'working' ? 'idle' : 'waiting')
+    }
+  })
+
   it('names each pane of a split tab from its own title', () => {
     const siblingPaneKey = makePaneKey(TAB_ID, SPLIT_SIBLING_LEAF_ID)
     const snapshot = buildDashboardSnapshot(

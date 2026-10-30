@@ -177,12 +177,22 @@ function paneActivityEntry(thread: AgentPaneThread): AgentStatusEntry | null {
 function threadCurrentState(
   thread: AgentPaneThread
 ): ActivityLiveAgentState | AgentStatusState | null {
-  return (
-    thread.currentAgentState ??
-    paneActivityEntry(thread)?.state ??
-    thread.latestEvent?.state ??
-    null
-  )
+  if (thread.currentAgentState) {
+    return thread.currentAgentState
+  }
+  // A closed wait leaves the waiting groups; an unanswered one stays however old.
+  if (thread.paneEntry?.state === 'working') {
+    return 'done'
+  }
+  const state = paneActivityEntry(thread)?.state ?? thread.latestEvent?.state ?? null
+  if (
+    (state === 'waiting' || state === 'blocked') &&
+    thread.events.length > 0 &&
+    !thread.events.some((event) => event.agentAlive)
+  ) {
+    return 'done'
+  }
+  return state
 }
 
 export function threadAgentStateLabel(thread: AgentPaneThread): string {

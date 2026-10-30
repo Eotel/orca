@@ -100,6 +100,16 @@ function baseState(): DashboardSnapshotState {
 }
 
 describe('buildDashboardBucketCounts per-worktree cache', () => {
+  it('counts unanswered questions as attention however old', () => {
+    const state = baseState()
+    state.agentStatusByPaneKey = {
+      [PANE_1]: { ...entry(PANE_1, 'tab1', 'w1'), state: 'waiting' },
+      [PANE_2]: { ...entry(PANE_2, 'tab2', 'w2'), state: 'blocked' }
+    }
+
+    expect(buildDashboardBucketCounts(state, NOW + 18 * 60 * 60_000).attention).toBe(2)
+  })
+
   it('computes every worktree on the first call and none when nothing changed', () => {
     const cache = createDashboardBucketCountsCache()
     const state = baseState()

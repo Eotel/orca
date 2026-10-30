@@ -239,7 +239,8 @@ export class RuntimePtyForegroundAgent {
       return { agent: 'claude', superseded: this.foregroundEpochs.get(ptyId) !== epoch }
     }
     const confirmedAgent =
-      recognizeAgentProcess(await this.confirm(result.controller, ptyId))?.agent ?? null
+      recognizeAgentProcess(await this.confirm(result.controller, ptyId))?.agent ??
+      (this.deps.getPty(ptyId)?.foregroundAgent === 'claude' ? 'claude' : null)
     const superseded = this.foregroundEpochs.get(ptyId) !== epoch
     if (result.controller !== this.deps.getController()) {
       return { agent: null, superseded }

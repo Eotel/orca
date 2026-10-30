@@ -173,11 +173,8 @@ export function buildWorktreeAgentRows(args: {
     for (const entry of explicitEntries) {
       const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
       const isFresh = isExplicitAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
-      const shouldDecay =
-        !isFresh &&
-        (rowEntry.state === 'working' ||
-          rowEntry.state === 'blocked' ||
-          rowEntry.state === 'waiting')
+      // Why: an unanswered question stays attention however old; only a silent working turn decays.
+      const shouldDecay = !isFresh && rowEntry.state === 'working'
       const startedAt = effectiveWorktreeAgentRowStartedAt(rowEntry)
       rows.push({
         paneKey: rowEntry.paneKey,
@@ -216,9 +213,7 @@ export function buildWorktreeAgentRows(args: {
       continue
     }
     const isFresh = isExplicitAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
-    const shouldDecay =
-      !isFresh &&
-      (rowEntry.state === 'working' || rowEntry.state === 'blocked' || rowEntry.state === 'waiting')
+    const shouldDecay = !isFresh && rowEntry.state === 'working'
     rows.push({
       paneKey: rowEntry.paneKey,
       entry: rowEntry,

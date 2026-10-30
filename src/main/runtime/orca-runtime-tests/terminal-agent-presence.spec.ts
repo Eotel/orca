@@ -33,6 +33,33 @@ describe('terminal agent presence', () => {
       expect((await runtime.listTerminals()).terminals[0].agentIdentity).toBeUndefined()
     }
   )
+  it.skipIf(process.platform === 'win32')(
+    'keeps native Claude identity when an old daemon cannot confirm its version name',
+    async () => {
+      let foreground = 'claude'
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => foreground,
+        confirmForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime, 'pty-1', { paneTitle: 'worker' })
+
+      for (const name of ['claude', '2.1.295', 'claude', '2.1.295', '2.1.295']) {
+        foreground = name
+        await runtime.refreshPtyForegroundAgentFromController('pty-1')
+        expect((await runtime.listTerminals()).terminals[0].agentIdentity).toBe('claude')
+      }
+
+      foreground = 'zsh'
+      await runtime.refreshPtyForegroundAgentFromController('pty-1')
+      expect((await runtime.listTerminals()).terminals[0].agentIdentity).toBeUndefined()
+      foreground = '2.1.295'
+      await runtime.refreshPtyForegroundAgentFromController('pty-1')
+      expect((await runtime.listTerminals()).terminals[0].agentIdentity).toBeUndefined()
+    }
+  )
   it('finds an idle Claude by a fresh read when p_comm is its version directory', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-claude' })
     const runtime = new OrcaRuntimeService(store)

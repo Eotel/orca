@@ -39,6 +39,7 @@ vi.mock('@/lib/agent-catalog', () => ({
   }
 }))
 
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
@@ -147,6 +148,23 @@ function baseState(overrides: Partial<DashboardSnapshotState> = {}): DashboardSn
 }
 
 describe('buildDashboardSnapshot rows cache', () => {
+  it('keeps an unanswered question waiting however old while a silent working turn decays', () => {
+    for (const state of ['working', 'waiting'] as const) {
+      const aged = buildDashboardSnapshot(
+        baseState({
+          agentStatusByPaneKey: {
+            [PANE_1]: entry(PANE_1, 'tab1', 'w1', {
+              state,
+              mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 1000 }
+            })
+          }
+        }),
+        NOW + AGENT_STATUS_STALE_AFTER_MS + 1000
+      )
+      expect(aged.cards[0].dotState).toBe(state === 'working' ? 'idle' : 'waiting')
+    }
+  })
+
   it('recomputes only the worktree whose pane foreground process changed', () => {
     const cache = createWorktreeAgentRowsCache()
     const state: DashboardSnapshotState = {

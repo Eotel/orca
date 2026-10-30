@@ -211,7 +211,8 @@ export class RuntimePtyForegroundAgent {
       return null
     }
     const confirmedAgent =
-      recognizeAgentProcess(await this.confirm(result.controller, ptyId))?.agent ?? null
+      recognizeAgentProcess(await this.confirm(result.controller, ptyId))?.agent ??
+      (this.deps.getPty(ptyId)?.foregroundAgent === 'claude' ? 'claude' : null)
     if (result.controller !== this.deps.getController()) {
       return null
     }

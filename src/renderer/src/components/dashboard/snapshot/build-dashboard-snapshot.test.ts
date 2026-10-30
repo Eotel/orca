@@ -8,6 +8,7 @@ import type { DashboardSnapshotInput as DashboardSnapshotState } from './build-d
 
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
@@ -129,6 +130,58 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
 }
 
 describe('buildDashboardSnapshot', () => {
+  it('keeps an unanswered question waiting however old while a silent working turn decays', () => {
+    for (const state of ['working', 'waiting'] as const) {
+      const aged = buildDashboardSnapshot(
+        baseState({
+          agentStatusByPaneKey: acceptedAgentStatuses([
+            [
+              PANE_KEY,
+              entry({
+                state,
+                mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 1000 }
+              })
+            ]
+          ])
+        }),
+        NOW + AGENT_STATUS_STALE_AFTER_MS + 1000
+      )
+      expect(aged.cards[0].dotState).toBe(state === 'working' ? 'idle' : 'waiting')
+    }
+  })
+
+  it('counts unanswered questions as attention however old', () => {
+    const otherPaneKey = makePaneKey('tab2', LEAF_ID)
+    const state = baseState({
+      worktreesByRepo: { r1: [worktree(), worktree('w2', 'wt-two')] },
+      tabsByWorktree: { w1: [tab()], w2: [{ ...tab('tab2', 'w2'), ptyId: 'pty2' }] },
+      terminalLayoutsByTabId: {
+        [TAB_ID]: {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'pty1' }
+        },
+        tab2: {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'pty2' }
+        }
+      },
+      ptyIdsByTabId: { [TAB_ID]: ['pty1'], tab2: ['pty2'] },
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [PANE_KEY, entry({ state: 'waiting' })],
+        [
+          otherPaneKey,
+          entry({ paneKey: otherPaneKey, tabId: 'tab2', worktreeId: 'w2', state: 'blocked' })
+        ]
+      ])
+    })
+
+    expect(buildDashboardBucketCounts(state, NOW + 18 * 60 * 60_000).attention).toBe(2)
+  })
+
   it('counts a remote row in its host workspace when a local tab ID collides', () => {
     const workspaceId = folderWorkspaceKey('folder-1')
     const state = baseState({

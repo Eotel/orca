@@ -20,7 +20,7 @@ import type {
   TerminalTab
 } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
-import { resolveAgentRowState } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
+import { resolveAttentionKeepingAgentRowState } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { tabHasLivePty } from '../../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
@@ -103,7 +103,7 @@ export function buildExplicitWorktreeAgentRows(
       tab,
       agentType: resolveRowAgentType(rowEntry, tab),
       rowSource: 'live',
-      state: resolveAgentRowState(rowEntry, now, hasLivePty),
+      state: resolveAttentionKeepingAgentRowState(rowEntry, now, hasLivePty),
       startedAt: effectiveWorktreeAgentRowStartedAt(rowEntry)
     },
     ...buildSubagentChildRows({
@@ -161,7 +161,7 @@ export function buildWorktreeAgentRows(args: {
         tab,
         agentType: resolveRowAgentType(rowEntry, tab),
         rowSource: 'live',
-        state: resolveAgentRowState(rowEntry, args.now, hasLivePty),
+        state: resolveAttentionKeepingAgentRowState(rowEntry, args.now, hasLivePty),
         startedAt
       })
       rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))
@@ -202,7 +202,11 @@ export function buildWorktreeAgentRows(args: {
       agentType: resolveRowAgentType(rowEntry, tab),
       rowSource: 'live',
       // Even synthesized tabs use available PTY evidence to distinguish idle from unverifiable decay.
-      state: resolveAgentRowState(rowEntry, args.now, tabHasLivePty(ptyIdsByTabId, tab.id)),
+      state: resolveAttentionKeepingAgentRowState(
+        rowEntry,
+        args.now,
+        tabHasLivePty(ptyIdsByTabId, tab.id)
+      ),
       startedAt
     })
     rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))

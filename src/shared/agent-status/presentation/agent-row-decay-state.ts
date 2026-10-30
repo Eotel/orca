@@ -33,6 +33,17 @@ export function resolveAgentRowState(
     : entry.state
 }
 
+/** The workspace card's row state: an unanswered question stays attention however old; only a silent working turn decays. */
+export function resolveAttentionKeepingAgentRowState(
+  entry: DecayInput & Parameters<typeof isAgentStatusFresh>[0],
+  now: number,
+  hasLivePty: boolean
+): AgentRowState {
+  return entry.state === 'blocked' || entry.state === 'waiting'
+    ? entry.state
+    : resolveAgentRowState(entry, now, hasLivePty)
+}
+
 /** Coarse `34m` / `2h` / `3d` duration, floored so it never overstates the gap. */
 export function formatCompactDuration(deltaMs: number): string {
   const minutes = Math.max(0, Math.floor(deltaMs / 60_000))

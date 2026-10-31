@@ -367,7 +367,8 @@ describe('opening a workspace-slept running agent on a host with no window', () 
       await expect(runtime.resumeSleptPane(pane, false)).resolves.toBe(true)
       for (let call = 0; call < 4; call += 1) {
         expect(spawnedCommand(spawn, call)).toContain('provider-session-1')
-        expect(spawnedCommand(spawn, call)).not.toContain('--dangerously-skip-permissions')
+        // An unrecorded launch takes the Settings defaults on every retry.
+        expect(spawnedCommand(spawn, call)).toContain('--dangerously-skip-permissions')
       }
       expect(spawn).toHaveBeenLastCalledWith(
         expect.objectContaining({ spawnIntent: 'user-resume' })

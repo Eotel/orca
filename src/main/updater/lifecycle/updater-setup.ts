@@ -22,6 +22,7 @@ import { UpdaterDownloadInstall } from './updater-download-install'
 import { configureMacShipItScheduling } from '../mac-install/macos-shipit-scheduling'
 import { handleElectronUpdaterProxyLogin } from './electron-updater-proxy-session'
 import { resolveWindowsUpdateInstallDirectory } from './windows-update-install-directory'
+import { isLocalBuildVersion } from '../releases/local-build-version'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
 
 export type UpdaterSetupOptions = {
@@ -236,6 +237,11 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
         this.userInitiatedCheck = value
       }
     })
+
+    // The handlers above still serve the explicit local-build switch.
+    if (isLocalBuildVersion(app.getVersion())) {
+      return
+    }
 
     void this.checkForUpdateNudge()
     this.scheduleUpdateNudgeCheck()

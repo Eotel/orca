@@ -6,6 +6,7 @@ import { updaterCodedMessage } from '../../../shared/updater/updater-failure-cop
 import { managesUpdates } from '../releases/updater-release-policy'
 import { UpdaterScheduling } from './updater-scheduling'
 import { isPendingTeamRestart } from './updater-state'
+import { isLocalBuildVersion } from '../releases/local-build-version'
 
 export abstract class UpdaterMenuChecks extends UpdaterScheduling {
   protected checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
@@ -50,6 +51,10 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
       return
     }
     this.restoreReleaseUpdateSource()
+    if (isLocalBuildVersion(app.getVersion())) {
+      this.sendStatus({ state: 'not-available', userInitiated: true })
+      return
+    }
 
     const checkVariant = this.getUpdateCheckVariant(options)
     if (checkVariant === 'prerelease') {

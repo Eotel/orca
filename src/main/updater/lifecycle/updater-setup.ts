@@ -5,8 +5,7 @@ import type { ReleaseBuildListOptions } from '../releases/updater-release-build-
 import {
   managesUpdates,
   requiredMinimumVersion,
-  sameTeamUpdatePolicy,
-  type TeamUpdatePolicy
+  sameTeamUpdatePolicy
 } from '../releases/updater-release-policy'
 import type {
   LinuxPackageInstallInstructions,
@@ -25,35 +24,15 @@ import { getServeUpdateHandoffFailure } from '../serve-update-handoff'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS, TEAM_POLICY_CHECK_RETRY_MS } from './updater-state'
 import { UpdaterDownloadInstall } from './updater-download-install'
-import type { TeamRestartOptions } from './updater-required-restart'
 import { sameTeamUpdateRestartScope } from './team-update-restart-record'
 import { configureMacShipItScheduling } from '../mac-install/macos-shipit-scheduling'
 import { handleElectronUpdaterProxyLogin } from './electron-updater-proxy-session'
 import { resolveWindowsUpdateInstallDirectory } from './windows-update-install-directory'
-import type {
-  PreQuitCleanupFailureMode,
-  UpdateInstallMode,
-  UpdateInstallTrigger
-} from './updater-state'
+import { isLocalBuildVersion } from '../releases/local-build-version'
+import type { UpdaterSetupOptions } from './updater-setup-options'
+import type { UpdateInstallMode, UpdateInstallTrigger } from './updater-state'
 
-export type UpdaterSetupOptions = {
-  getMainWindow?: () => BrowserWindow | null
-  getLastUpdateCheckAt?: () => number | null
-  onBeforeQuit?: () => void | Promise<void>
-  setLastUpdateCheckAt?: (timestamp: number) => void
-  getPendingUpdateNudgeId?: () => string | null
-  getDismissedUpdateNudgeId?: () => string | null
-  setPendingUpdateNudgeId?: (id: string | null) => void
-  setDismissedUpdateNudgeId?: (id: string | null) => void
-  getReleaseChannelOverride?: () => ReleaseChannel | null
-  getTeamUpdatePolicy?: () => TeamUpdatePolicy | undefined
-  onTeamUpdatePolicyChanged?: (listener: () => void) => void
-  teamRestart?: TeamRestartOptions
-  getUpdateDelayDays?: () => number
-  getAutomaticUpdates?: () => boolean
-  installMode?: UpdateInstallMode
-  onBeforeQuitFailure?: PreQuitCleanupFailureMode
-}
+export type { UpdaterSetupOptions }
 
 export class UpdaterSetup extends UpdaterDownloadInstall {
   checkForUpdates(): void {
@@ -297,6 +276,11 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
         this.userInitiatedCheck = value
       }
     })
+
+    // The handlers above still serve the explicit local-build switch.
+    if (isLocalBuildVersion(app.getVersion())) {
+      return
+    }
 
     void this.checkForUpdateNudge()
     this.scheduleUpdateNudgeCheck()

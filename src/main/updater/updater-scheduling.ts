@@ -7,6 +7,7 @@ import {
   MAX_AUTO_UPDATE_RETRY_INTERVAL_MS
 } from './updater-state'
 import { UpdaterCheckFailure } from './updater-check-failure'
+import { isLocalBuildVersion } from './local-build-version'
 
 export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   protected getAutomaticRetryInterval(): number {
@@ -63,7 +64,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     if (this.backgroundCheckLaunchPending || this.currentStatus.state === 'checking') {
       return false
     }
-    if (!app.isPackaged) {
+    if (!app.isPackaged || isLocalBuildVersion(app.getVersion())) {
       this.sendStatus({ state: 'not-available' })
       return false
     }

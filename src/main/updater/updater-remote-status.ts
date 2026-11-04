@@ -8,6 +8,7 @@ import type {
 import { hasServeUpdateSupervisor } from '../serve-update-handoff'
 import { getLinuxPackageType } from '../linux-update-package-type'
 import { UpdaterNudge } from './updater-nudge'
+import { isLocalBuildVersion } from './local-build-version'
 import type { UpdateInstallMode } from './updater-state'
 
 export abstract class UpdaterRemoteStatus extends UpdaterNudge {
@@ -16,7 +17,7 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
   }
 
   protected getRemoteServerUpdateSupport(): RemoteServerUpdateSupport {
-    if (!app.isPackaged) {
+    if (!app.isPackaged || isLocalBuildVersion(app.getVersion())) {
       return {
         installMode: this.updateInstallMode,
         automatic: false,

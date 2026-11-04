@@ -13,6 +13,7 @@ import { profileStateBuildCompatibilityError } from '../../shared/profile-state-
 import { listReleaseBuilds, resolveTargetBuild } from '../updater-release-builds'
 import { ReleaseBuildListCache, type ReleaseBuildListOptions } from '../updater-release-build-cache'
 import { UpdaterMenuChecks } from './updater-menu-checks'
+import { isLocalBuildVersion } from './local-build-version'
 import { updaterCodedMessage } from '../../shared/updater-failure-copy'
 import { updaterErrorMessage } from './updater-coded-error'
 
@@ -89,7 +90,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
 
   /** Pin any published channel/tag, including deliberate downgrades. */
   protected async checkForPinnedBuild(channel: ReleaseChannel, tag: string): Promise<void> {
-    if (!app.isPackaged) {
+    if (!app.isPackaged || isLocalBuildVersion(app.getVersion())) {
       this.sendStatus({ state: 'not-available', userInitiated: true })
       return
     }

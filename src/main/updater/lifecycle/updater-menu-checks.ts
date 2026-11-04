@@ -3,6 +3,7 @@ import { isMacInstallRequested } from '../mac-install/updater-mac-install'
 import type { UpdateCheckOptions } from '../../../shared/updater/update-status-types'
 import type { ReleaseChannel } from '../../../shared/updater/release-channel'
 import { UpdaterScheduling } from './updater-scheduling'
+import { isLocalBuildVersion } from '../releases/local-build-version'
 
 export abstract class UpdaterMenuChecks extends UpdaterScheduling {
   protected checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
@@ -34,6 +35,10 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
       return
     }
     this.restoreReleaseUpdateSource()
+    if (isLocalBuildVersion(app.getVersion())) {
+      this.sendStatus({ state: 'not-available', userInitiated: true })
+      return
+    }
 
     const checkVariant = this.getUpdateCheckVariant(options)
     if (checkVariant === 'prerelease') {

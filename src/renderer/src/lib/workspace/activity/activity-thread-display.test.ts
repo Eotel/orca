@@ -13,6 +13,30 @@ describe('getActivityThreadTaskTitle', () => {
     defaultTitle: 'Claude'
   }
 
+  it("names a resumed session by its own name, not the tab's first prompt", () => {
+    expect(
+      getActivityThreadTaskTitle({
+        entry: {
+          prompt: 'How is the rename going?',
+          stateHistory: [],
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'session-1' }
+        },
+        tab: {
+          ...tab,
+          generatedTitle: 'Mac restarted at 15 01 so this tab stopped',
+          aiVaultTitle: {
+            agent: 'claude',
+            sessionId: 'session-1',
+            title: 'Triage lead handover',
+            kind: 'named'
+          }
+        },
+        generatedTitlesEnabled: true
+      })
+    ).toBe('Triage lead handover')
+  })
+
   it('picks the most recent substantive prompt from history, not the longest', () => {
     expect(
       getActivityThreadTaskTitle({

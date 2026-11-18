@@ -5,7 +5,11 @@ import type {
 } from '../../../shared/agent-accounts/managed-account-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
-import { claudeStateFile, readClaudeFolderLogin } from '../sign-in/claude-account-folder'
+import {
+  claudeStateFile,
+  readClaudeFolderLogin,
+  summarizeClaudeFolderLogin
+} from '../sign-in/claude-account-folder'
 import { readClaudeOAuthCredentials } from '../../rate-limits/providers/claude/claude-oauth-credentials'
 import { resolveLoginShellEnvironment } from '../../startup/shell-environment/login-shell-environment'
 import { savedWslClaudeAccountHome } from '../profiles/wsl/claude-profile-wsl-paths'
@@ -113,13 +117,7 @@ export class ClaudeAccountSelection {
     const home = this.runtimeAuth.router.accountHome(account.id)
     const login = readClaudeFolderLogin(claudeStateFile(home))
     if (login) {
-      return {
-        ...summary,
-        home,
-        email: login.email,
-        organizationUuid: login.organizationUuid,
-        organizationName: login.organizationName
-      }
+      return { ...summary, home, ...summarizeClaudeFolderLogin(account, login) }
     }
     // Allow System default to supply the login until the account signs in separately.
     return this.runtimeAuth.router.coveredBySystemDefault(account.id)

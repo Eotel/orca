@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { ClaudeRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
 import { translate } from '@/i18n/i18n'
+import { getClaudeAccountAddedAsHint } from '@/lib/provider-accounts/claude-account-label'
 import {
   getCodexStatusRuntimeKey,
   getCodexStatusRuntimeLabel,
@@ -90,22 +91,27 @@ export function buildClaudeStatusSwitchGroups(
           active: activeId === null,
           runtimeTarget: target
         },
-        ...accountsForTarget.map((account) => ({
-          id: account.id,
-          label: account.email,
-          active: account.id === activeId,
-          runtimeTarget: target,
-          ...(account.needsSignIn
-            ? {
-                disabled: true,
-                needsSignIn: true,
-                hint: translate(
-                  'accounts.claude.signInRequired',
-                  'Sign in again to use this account'
-                )
-              }
-            : {})
-        }))
+        ...accountsForTarget.map((account) => {
+          const addedAsHint = getClaudeAccountAddedAsHint(account)
+          return {
+            id: account.id,
+            label: account.email,
+            active: account.id === activeId,
+            runtimeTarget: target,
+            ...(account.needsSignIn
+              ? {
+                  disabled: true,
+                  needsSignIn: true,
+                  hint: translate(
+                    'accounts.claude.signInRequired',
+                    'Sign in again to use this account'
+                  )
+                }
+              : addedAsHint
+                ? { hint: addedAsHint }
+                : {})
+          }
+        })
       ]
     }
   }

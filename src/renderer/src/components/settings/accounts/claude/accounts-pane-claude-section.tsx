@@ -32,6 +32,7 @@ import {
   trackAccountAddition
 } from '../sign-in/account-add-cancel-target'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { getClaudeAccountAddedAsHint } from '@/lib/provider-accounts/claude-account-label'
 
 export function renderClaudeAccountsSection(
   model: AccountsPaneSectionModel,
@@ -329,9 +330,13 @@ export function renderClaudeAccountsSection(
                                 'accounts.claude.signInRequired',
                                 'Sign in again to use this account'
                               )
-                            : account.organizationName
-                              ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}`
-                              : formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}
+                            : [
+                                getClaudeAccountAddedAsHint(account),
+                                account.organizationName,
+                                formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
                         </span>
                       </button>
                       <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">

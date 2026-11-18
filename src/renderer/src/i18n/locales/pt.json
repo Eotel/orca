@@ -24186,7 +24186,8 @@
         "about": "Sobre a consulta de uso do Claude"
       },
       "organizationSuffix": "Organização ···{{suffix}}",
-      "personalOrganization": "Pessoal"
+      "personalOrganization": "Pessoal",
+      "addedAs": "Adicionada como {{value0}}"
     },
     "codex": {
       "usageSignInLabel": "Desconectado",

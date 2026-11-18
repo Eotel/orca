@@ -25479,7 +25479,8 @@
         "about": "Claude kullanım sorgulaması hakkında"
       },
       "organizationSuffix": "Kuruluş ···{{suffix}}",
-      "personalOrganization": "Kişisel"
+      "personalOrganization": "Kişisel",
+      "addedAs": "{{value0}} olarak eklendi"
     },
     "codex": {
       "usageSignInLabel": "Oturum kapalı",

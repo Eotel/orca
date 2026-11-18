@@ -24989,7 +24989,8 @@
         "about": "關於 Claude 用量輪詢"
       },
       "organizationSuffix": "組織 ···{{suffix}}",
-      "personalOrganization": "個人"
+      "personalOrganization": "個人",
+      "addedAs": "新增時為 {{value0}}"
     },
     "codex": {
       "usageSignInLabel": "已登出",

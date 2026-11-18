@@ -23278,7 +23278,8 @@
         "about": "Über die Claude-Nutzungsabfrage"
       },
       "organizationSuffix": "Organisation ···{{suffix}}",
-      "personalOrganization": "Persönlich"
+      "personalOrganization": "Persönlich",
+      "addedAs": "Hinzugefügt als {{value0}}"
     },
     "codex": {
       "usageSignInLabel": "Abgemeldet",

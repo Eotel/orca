@@ -23559,7 +23559,8 @@
         "about": "À propos du suivi de l’utilisation de Claude"
       },
       "organizationSuffix": "Organisation ···{{suffix}}",
-      "personalOrganization": "Personnelle"
+      "personalOrganization": "Personnelle",
+      "addedAs": "Ajouté en tant que {{value0}}"
     },
     "codex": {
       "usageSignInLabel": "Déconnecté",

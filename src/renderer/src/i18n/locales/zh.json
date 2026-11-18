@@ -25132,7 +25132,8 @@
         "about": "关于 Claude 用量轮询"
       },
       "organizationSuffix": "组织 ···{{suffix}}",
-      "personalOrganization": "个人"
+      "personalOrganization": "个人",
+      "addedAs": "添加时为 {{value0}}"
     },
     "codex": {
       "usageSignInLabel": "已退出登录",

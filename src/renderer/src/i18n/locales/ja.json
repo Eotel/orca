@@ -23984,7 +23984,8 @@
         "about": "Claude の使用量の定期取得について"
       },
       "organizationSuffix": "組織 ···{{suffix}}",
-      "personalOrganization": "個人"
+      "personalOrganization": "個人",
+      "addedAs": "{{value0}} として追加"
     },
     "codex": {
       "usageSignInLabel": "サインアウト済み",

@@ -22820,7 +22820,8 @@
         "about": "Acerca de la consulta de uso de Claude"
       },
       "organizationSuffix": "Organización ···{{suffix}}",
-      "personalOrganization": "Personal"
+      "personalOrganization": "Personal",
+      "addedAs": "Agregada como {{value0}}"
     },
     "codex": {
       "usageSignInLabel": "Sesión cerrada",

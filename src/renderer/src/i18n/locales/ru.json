@@ -24031,7 +24031,8 @@
         "about": "Об опросе использования Claude"
       },
       "organizationSuffix": "Организация ···{{suffix}}",
-      "personalOrganization": "Личная"
+      "personalOrganization": "Личная",
+      "addedAs": "Добавлена как {{value0}}"
     },
     "codex": {
       "usageSignInLabel": "Вход не выполнен",

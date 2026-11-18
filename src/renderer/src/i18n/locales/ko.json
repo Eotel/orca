@@ -25064,7 +25064,8 @@
         "about": "Claude 사용량 주기적 조회 정보"
       },
       "organizationSuffix": "조직 ···{{suffix}}",
-      "personalOrganization": "개인"
+      "personalOrganization": "개인",
+      "addedAs": "{{value0}}(으)로 추가됨"
     },
     "codex": {
       "usageSignInLabel": "로그아웃됨",

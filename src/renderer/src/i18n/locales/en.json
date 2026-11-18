@@ -25342,7 +25342,8 @@
         "about": "About Claude usage polling"
       },
       "organizationSuffix": "Organization ···{{suffix}}",
-      "personalOrganization": "Personal"
+      "personalOrganization": "Personal",
+      "addedAs": "Added as {{value0}}"
     },
     "codex": {
       "usageSignInLabel": "Signed out",

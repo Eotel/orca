@@ -10,6 +10,7 @@ import {
 } from '../../../../../shared/claude-account-identity'
 import type { ClaudeRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
 import { translate } from '@/i18n/i18n'
+import { claudeAccountAddedAsHintField } from '@/lib/provider-accounts/claude-account-label'
 import {
   getCodexStatusRuntimeKey,
   getCodexStatusRuntimeLabel,
@@ -168,7 +169,7 @@ export function buildClaudeStatusSwitchGroups(
                     'Sign in again to use this account'
                   )
                 }
-              : {})
+              : claudeAccountAddedAsHintField(account))
           }
         })
       ]

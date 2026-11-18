@@ -197,6 +197,19 @@ describe('ClaudeAccountService', () => {
     expect(f.settings().claudeManagedAccounts.map((entry) => entry.id)).toEqual(['a', 'b'])
   })
 
+  it('refuses to sign a saved account in again as a login another account already has', async () => {
+    const f = fixture()
+    f.signIn('a', 'a@example.test')
+    f.runLogin.mockImplementationOnce(async () => {
+      f.signIn('b', 'a@example.test')
+      return ''
+    })
+    await expect(f.service.reauthenticateAccount('b')).rejects.toThrow('already added')
+    expect(f.settings().claudeManagedAccounts.find((entry) => entry.id === 'b')).toMatchObject({
+      email: 'b@example.test'
+    })
+  })
+
   it('refuses to select an account that has its identity but no login to start Claude with', async () => {
     const f = fixture()
     f.signIn('b', 'b@example.test')

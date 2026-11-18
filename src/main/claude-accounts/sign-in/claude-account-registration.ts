@@ -4,7 +4,7 @@ import type {
   ClaudeRateLimitAccountsState,
   ClaudeSignInRequest
 } from '../../../shared/agent-accounts/managed-account-types'
-import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
+import { claudeStateFile, isSameClaudeLogin, readClaudeFolderLogin } from './claude-account-folder'
 import type {
   ClaudeAccountRuntime,
   ClaudeAccountSelection,
@@ -98,15 +98,17 @@ export class ClaudeAccountRegistration {
       wslDistro: target.runtime === 'wsl' ? (target.wslDistro ?? null) : null
     } as const
     if (
-      !saved &&
+      // A saved account may sign in again as itself even when another folder now shares its login.
+      (!saved || !isSameClaudeLogin(saved, login)) &&
       // Compare current folder logins; saved identities may be stale.
-      findDuplicateClaudeAccount(selection.list().accounts, {
-        email: login.email,
-        organizationUuid: login.organizationUuid,
-        ...scope
-      })
+      findDuplicateClaudeAccount(
+        selection.list().accounts.filter((entry) => entry.id !== signIn.accountId),
+        { email: login.email, organizationUuid: login.organizationUuid, ...scope }
+      )
     ) {
-      await runtimeAuth.removeAccountFolder(signIn.accountId, target)
+      if (!saved) {
+        await runtimeAuth.removeAccountFolder(signIn.accountId, target)
+      }
       throw new Error('This Claude account is already added.')
     }
     const now = Date.now()
